@@ -1,0 +1,24 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "x402-census"
+version = "0.1.0"
+description = "Read-only client for the PayCensus machine-payment census data layer"
+readme = "README.md"
+requires-python = ">=3.8"
+license = { text = "MIT" }
+authors = [{ name = "PayCensus Labs" }]
+keywords = ["x402", "machine-payments", "census", "analytics"]
+classifiers = [
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Topic :: Office/Business :: Financial",
+]
+dependencies = []
+
+[project.urls]
+Homepage = "https://paycensus.com"
+Source = "https://github.com/OneLight1688/paycensus-x402-census"
