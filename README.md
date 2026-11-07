@@ -62,6 +62,22 @@ entity graph does not change.
 - Anchoring preserves *integrity*, not *correctness* — correctness comes from the
   public methodology in `/data/audit.json`, which anyone can independently re-run.
 
+## Verify the data yourself (Proof-of-Integrity)
+
+Every day's snapshot (stats + calendar + audit) is hash-chained and **anchored to
+Bitcoin** via [OpenTimestamps](https://opentimestamps.org) — a 60-line standard,
+no trusted third party, no API key. Verify it independently:
+
+```bash
+paycensus-verify --base https://paycensus.com          # chain + snapshot hashes
+paycensus-verify --ots                                  # + Bitcoin block attestation (needs `ots`)
+```
+
+Or verify manually: download `data/ots/{label}.snapshot` + `{label}.ots` from
+paycensus.com and run `ots verify -f snapshot ots`, or upload both at
+https://verify.opentimestamps.org. The chain has been unbroken since genesis
+(2026-10-31) and is never backfilled.
+
 ## License
 
 MIT

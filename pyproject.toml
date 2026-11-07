@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "paycensus"
-version = "0.2.0"
+version = "0.3.0"
 description = "Read-only client for the PayCensus machine-payment census (x402 + MPP, protocol-agnostic entity layer)"
 readme = "README.md"
 requires-python = ">=3.8"
@@ -18,6 +18,9 @@ classifiers = [
     "Topic :: Office/Business :: Financial",
 ]
 dependencies = []
+
+[project.scripts]
+paycensus-verify = "paycensus.verify:main"
 
 [project.urls]
 Homepage = "https://paycensus.com"
