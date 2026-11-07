@@ -7,6 +7,8 @@ All data comes from public endpoints of https://paycensus.com:
   /data/audit.json      collection lineage + methodology
   /data/anchoring.json  daily Bitcoin anchoring (OpenTimestamps receipts)
   /data/entities.json   payTo -> domain/title/description (sellers only)
+  /data/directory.json  the registry: cross-protocol entity directory (7 categories)
+  /data/indicators.json leading indicators (already-collected data, never forecasts)
   /data/leads.json      tier + protocol counters (counts only; contact emails are never published)
   /data/mpp.json        MPP/Tempo monitor: chain samples, offer graph, seller-side protocol census
   /api/seller /api/buyer /api/edges   processed commercial info (who pays whom)
@@ -22,7 +24,7 @@ DEFAULT_BASE = "https://paycensus.com"
 
 
 class PayCensus:
-    def __init__(self, base: str = DEFAULT_BASE, timeout: int = 15, user_agent: str = "paycensus/0.2"):
+    def __init__(self, base: str = DEFAULT_BASE, timeout: int = 15, user_agent: str = "paycensus/0.4"):
         self.base = base.rstrip("/")
         self.timeout = timeout
         self.headers = {"User-Agent": user_agent, "Accept": "application/json"}
@@ -66,6 +68,17 @@ class PayCensus:
         """MPP/Tempo monitor: hourly chain samples, offer graph parsed from
         sellers' 402 challenges, seller-side protocol census (x402/mpp/dual)."""
         return self._get("/data/mpp.json")
+
+    # ---- registry / indicators -----------------------------------------------------
+    def directory(self) -> dict:
+        """The registry: unified cross-protocol entity directory — x402 attribution
+        plus MPP offers, 7 categories. Built on the Bitcoin-anchored census files."""
+        return self._get("/data/directory.json")
+
+    def indicators(self) -> dict:
+        """Leading indicators — every number is already-collected data, never a
+        forecast (median offer price, Tempo/Base ratio, HHI, churn, ...)."""
+        return self._get("/data/indicators.json")
 
     # ---- query API -----------------------------------------------------------------
     def seller(self, addr: str) -> dict:

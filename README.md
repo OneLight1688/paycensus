@@ -8,12 +8,16 @@ PayCensus indexes **who pays whom** across machine-payment protocols — **x402*
 (Machine Payments Protocol; Tempo chain sampled hourly, offer graph parsed from
 sellers' 402 challenges) — per entity, not per protocol. The ingest layer records
 the protocol source; the entity layer does not care. A daily calendar is never
-backfilled, and a chained digest of every day's snapshot is anchored to Bitcoin
+backfilled, and a chained digest of every day's snapshot is **Bitcoin-anchored**
 via [OpenTimestamps](https://opentimestamps.org) — publicly verifiable, zero cost.
 
 ## Install
 
-No PyPI release yet — install from source:
+```bash
+pip install paycensus
+```
+
+Or from source:
 
 ```bash
 pip install git+https://github.com/OneLight1688/paycensus.git
@@ -39,6 +43,11 @@ pc.buyer("0x…")                     # what this buyer pays for
 
 pc.mpp()                            # MPP/Tempo monitor: chain samples, offer graph,
                                     # seller-side protocol census (x402/mpp/dual)
+
+pc.directory()                      # the registry: cross-protocol entity directory
+                                    # (x402 attribution + MPP offers, 7 categories)
+pc.indicators()                     # leading indicators — already-collected data,
+                                    # never a forecast
 ```
 
 ## Protocol coverage
