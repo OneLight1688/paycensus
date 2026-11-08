@@ -48,7 +48,23 @@ pc.directory()                      # the registry: cross-protocol entity direct
                                     # (x402 attribution + MPP offers, 7 categories)
 pc.indicators()                     # leading indicators — already-collected data,
                                     # never a forecast
+
+# ---- Trust layer: counterparty verification before you settle ----
+pc.trust_status(addr="0x…")         # verified · pending · revoked · none (public)
+pc.trust_status(domain="seller.example.com")
+pc.trust_factors("0x…")             # metered factors: attribution, on-chain history
+                                    # + volume percentile, offers, contactability
+                                    # (10 calls/day free per key; key via POST
+                                    #  trust.paycensus.com/api/keys/create)
+pc.trust_factors("0x…", api_key="pct_live_…")
+pc.trust_revocations()              # public append-only revocation list
+pc.trust_founding()                 # founding-tier counter ($99/yr, first 100)
 ```
+
+Verification is deterministic domain-control checking (3 public DNS resolvers,
+2-of-3 must confirm; re-verified every 72h; 3 consecutive failures auto-revoke).
+**It states facts only — never a guarantee of honesty, solvency, or legality.**
+Badge + seal for your own site: <https://trust.paycensus.com/>
 
 ## Protocol coverage
 
