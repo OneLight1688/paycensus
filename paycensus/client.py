@@ -104,6 +104,13 @@ class PayCensus:
         """Top buyer x seller relationship edges."""
         return self._get("/api/edges", limit=limit, min_volume=min_volume)
 
+    def indices(self) -> dict:
+        """Daily indices — MPI (machine-payment settlement volume, base-100
+        chained to the census start) and TVI (trust-verified coverage of the
+        registry). Deterministic ratios of Bitcoin-anchored data; the client
+        can re-verify every number against the OTS attestations."""
+        return self._get("/data/indices.json")
+
     # ---- trust layer (counterparty verification) -----------------------------------
     def trust_status(self, addr: str = None, domain: str = None) -> dict:
         """Public verification status of a counterparty (cached ≤60s upstream).

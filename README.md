@@ -48,6 +48,9 @@ pc.directory()                      # the registry: cross-protocol entity direct
                                     # (x402 attribution + MPP offers, 7 categories)
 pc.indicators()                     # leading indicators — already-collected data,
                                     # never a forecast
+pc.indices()                        # daily indices — MPI (machine-payment volume,
+                                    # base-100 to census start) + TVI (trust-verified
+                                    # coverage %); deterministic, Bitcoin-anchored
 
 # ---- Trust layer: counterparty verification before you settle ----
 pc.trust_status(addr="0x…")         # verified · pending · revoked · none (public)
