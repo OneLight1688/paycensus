@@ -21,11 +21,11 @@ DB = "/var/lib/paycensus/census.db"
 OUT = "/www/wwwroot/paycensus/data/leads.json"
 
 THRESHOLDS = {
-    "T3": {"name": "Institutions (foundations/VCs/research)", "threshold": 50,
+    "T3": {"name": "Institutions (foundations/VCs/research)", "threshold": 200,
            "action": "monthly report + direct outreach (few, high-value)"},
-    "T1": {"name": "Developers / buyers", "threshold": 1000,
+    "T1": {"name": "Developers / buyers", "threshold": 250000,
            "action": "SDK launch + developer email sequence"},
-    "T2": {"name": "Sellers (API providers)", "threshold": 500,
+    "T2": {"name": "Sellers (API providers)", "threshold": 3000,
            "action": "seller revenue report email sequence + badge campaign"},
 }
 
