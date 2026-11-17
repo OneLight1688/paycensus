@@ -28,6 +28,7 @@ import json
 import random
 import sys
 import time
+import urllib.error
 import urllib.parse
 import urllib.request
 from datetime import datetime, timezone
@@ -113,17 +114,26 @@ def llm_tweet(token, model, system, user):
                  "Content-Type": "application/json",
                  "HTTP-Referer": "https://paycensus.com",
                  "X-Title": "PayCensus"})
-    try:
-        with urllib.request.urlopen(req, timeout=90) as r:
-            d = json.loads(r.read().decode("utf-8", "replace"))
-        if d.get("error"):
-            log(f"llm error ({model}): {str(d['error'])[:140]}")
+    for attempt in range(2):  # free tier: ~20 req/min — back off on 429
+        try:
+            with urllib.request.urlopen(req, timeout=90) as r:
+                d = json.loads(r.read().decode("utf-8", "replace"))
+            if d.get("error"):
+                log(f"llm error ({model}): {str(d['error'])[:140]}")
+                return ""
+            txt = (d.get("choices") or [{}])[0].get("message", {}).get("content", "")
+            return (txt or "").strip().strip('"')
+        except urllib.error.HTTPError as exc:
+            if exc.code == 429 and attempt == 0:
+                log(f"429 on {model} — backing off 55s (free-tier rpm)")
+                time.sleep(55)
+                continue
+            log(f"llm fail ({model}): http_{exc.code}")
             return ""
-        txt = (d.get("choices") or [{}])[0].get("message", {}).get("content", "")
-        return (txt or "").strip().strip('"')
-    except Exception as exc:  # noqa: BLE001
-        log(f"llm fail ({model}): {str(exc)[:120]}")
-        return ""
+        except Exception as exc:  # noqa: BLE001
+            log(f"llm fail ({model}): {str(exc)[:120]}")
+            return ""
+    return ""
 
 
 def hn_stories():
