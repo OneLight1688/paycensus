@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex">
+<title>PayCensus — Operations &amp; Audit</title>
+<style>
+  :root{--bg:#0a0e14;--panel:#11161f;--panel2:#161d29;--line:#1f2937;--txt:#e5ecf5;--dim:#8b98ab;--ok:#5eead4;--warn:#fbbf24;--err:#f87171}
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{background:var(--bg);color:var(--txt);font-family:'Segoe UI',system-ui,sans-serif}
+  .wrap{max-width:1100px;margin:0 auto;padding:36px 24px 64px}
+  h1{font-size:24px;font-weight:700}
+  h1 span{color:var(--dim);font-size:14px;font-weight:400;margin-left:10px}
+  h2{font-size:15px;margin:32px 0 12px;color:var(--txt)}
+  h2 em{color:var(--dim);font-style:normal;font-size:13px;font-weight:400}
+  .cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;margin:20px 0}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px 16px}
+  .card .k{font-size:11px;color:var(--dim);text-transform:uppercase;letter-spacing:1px}
+  .card .v{font-size:20px;font-weight:700;margin-top:4px;font-variant-numeric:tabular-nums}
+  .card .s{font-size:11px;color:var(--dim);margin-top:3px}
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:16px;overflow-x:auto}
+  table{width:100%;border-collapse:collapse;font-size:12.5px}
+  th{text-align:left;color:var(--dim);font-weight:500;padding:6px 8px;border-bottom:1px solid var(--line);font-size:11px;white-space:nowrap}
+  td{padding:6px 8px;border-bottom:1px solid #182130;font-variant-numeric:tabular-nums;white-space:nowrap}
+  .ok{color:var(--ok)} .partial{color:var(--warn)} .error{color:var(--err)}
+  .method{margin:8px 0;padding:10px 14px;border-left:3px solid #2dd4bf;background:var(--panel2);border-radius:0 8px 8px 0;font-size:13px;line-height:1.6;color:#c9d4e3}
+  .method b{color:var(--txt);text-transform:uppercase;font-size:11px;letter-spacing:1px}
+  .links{margin-top:24px;font-size:12px;color:var(--dim)}
+  a{color:var(--ok);text-decoration:none}
+  .loading{text-align:center;color:var(--dim);padding:50px}
+  .wrap header{display:flex;align-items:baseline;gap:14px;flex-wrap:wrap}
+  .live{font-size:12px;color:var(--ok);border:1px solid #1e3d37;background:#0d1f1b;border-radius:999px;padding:2px 10px}
+</style>
+<script defer src="https://static.cloudflareinsights.com/beacon.min.js" data-cf-beacon='{"token": "3533e37c01944a7cbeb1d684a17a3184}'></script><link rel="icon" type="image/png" href="/favicon.ico"></head>
+<body>
+<div class="wrap">
+  <header>
+    <img src="/logo.png" alt="PayCensus logo" style="width:34px;height:34px;border-radius:50%;flex:0 0 auto">
+    <h1>PayCensus <span>Operations &amp; Audit</span></h1>
+    <span class="live">MACHINE-READABLE</span>
+  </header>
+  <p style="color:var(--dim);font-size:13px;margin-top:8px;max-width:820px;line-height:1.6">
+    Every collector run is recorded — cursor reached, items ingested, processing time, errors.
+    This page and the underlying JSON are public on purpose: the census is only as good as its audit trail.
+    Raw counters below are cumulative since 2026-10-31 (history starts at launch, never backfilled).</p>
+
+  <div id="app"><div class="loading">Loading audit data…</div></div>
+
+  <h2>Proof of Integrity <em>· hash-chained &amp; anchored to Bitcoin via OpenTimestamps</em></h2>
+  <div class="panel"><table><thead>
+    <tr><th>Snapshot</th><th>Chain digest (SHA-256)</th><th>Status</th><th>BTC block</th><th>Verify</th></tr>
+  </thead><tbody id="anch"></tbody></table></div>
+  <p style="color:var(--dim);font-size:12px;margin-top:8px;max-width:820px;line-height:1.6">
+    Every day the three public data files are snapshotted, and the snapshot's hash — chained to the previous
+    day's hash — is anchored into the Bitcoin blockchain via OpenTimestamps. This proves, cryptographically,
+    that the published history has never been rewritten after the fact: altering any past day would break
+    every subsequent link. <span class="mono">$0</span> cost, no account, receipts are third-party verifiable
+    with <span class="mono">ots verify</span> or <a href="https://verify.opentimestamps.org" rel="noopener">verify.opentimestamps.org</a>. Receipts (.ots) are binary proofs — they look empty in a browser; click <b>info</b> for a human-readable summary.</p>
+
+  <h2>How the data is processed <em>· the pipeline, stated openly</em></h2>
+  <div id="method"></div>
+
+  <h2>Collector runs <em>· last 100, newest first (machine feed: <a href="data/audit.json">audit.json</a>)</em></h2>
+  <div class="panel"><table><thead>
+    <tr><th>time (UTC)</th><th>tool</th><th>chain</th><th>status</th><th>cursor</th><th>scanned</th><th>new items</th><th>total txs</th><th>total volume $</th><th>ms</th></tr>
+  </thead><tbody id="runs"></tbody></table></div>
+
+  <h2>MPP / Tempo monitor <em>· competitor settlement chain, public keyless API (feed: <a href="data/mpp.json">mpp.json</a>)</em></h2>
+  <div class="panel"><table><thead>
+    <tr><th>time (UTC)</th><th>latest block</th><th>block time</th><th>txs sampled</th><th>tx/min</th><th>est daily txs</th><th>tx types</th></tr>
+  </thead><tbody id="mpp"></tbody></table></div>
+
+  <h2>USDT rail watch <em>· Tether rails (Plasma/Stable) — EIP-3009 machine-payment settlements, monthly first-party probe (feed: <a href="data/usdt_watch.json">usdt_watch.json</a>)</em></h2>
+  <div class="panel"><table><thead>
+    <tr><th>probed (UTC)</th><th>Plasma tx/min</th><th>USDT0 txs</th><th>EIP-3009 auth</th><th>Stable tx/min</th><th>USDT0 txs</th><th>EIP-3009 auth</th><th>facilitator</th><th>verdict</th></tr>
+  </thead><tbody id="usdtr"></tbody></table></div>
+
+  <div class="links">
+    Machine feeds: <a href="data/stats.json">stats.json</a> (aggregates) ·
+    <a href="data/calendar.json">calendar.json</a> (daily calendar for backtesting) ·
+    <a href="data/indices.json">indices.json</a> (MPI / TVI daily indices) ·
+    <a href="data/audit.json">audit.json</a> (this audit trail) ·
+    <a href="data/mpp.json">mpp.json</a> (MPP/Tempo monitor) ·
+    <a href="data/usdt_watch.json">usdt_watch.json</a> (USDT rail watch) ·
+    <a href="/">public panel</a><br>
+    Aggregate tables live in one SQLite database; raw events are intentionally never stored (aggregate-first, privacy and cost by design).
+  </div>
+</div>
+
+<script>
+const N = n => (n ?? 0).toLocaleString("en-US", {maximumFractionDigits: 2});
+function el(h){const t=document.createElement("template");t.innerHTML=h.trim();return t.content.firstChild;}
+
+async function main(){
+  let a, s, anch, mpp, usw;
+  try{
+    [a, s, anch, mpp, usw] = await Promise.all([
+      fetch("data/audit.json?ts="+Date.now()).then(r=>r.json()),
+      fetch("data/stats.json?ts="+Date.now()).then(r=>r.json()),
+      fetch("data/anchoring.json?ts="+Date.now()).then(r=>r.json()).catch(()=>null),
+      fetch("data/mpp.json?ts="+Date.now()).then(r=>r.json()).catch(()=>null),
+      fetch("data/usdt_watch.json?ts="+Date.now()).then(r=>r.json()).catch(()=>null)
+    ]);
+  }catch(e){
+    document.getElementById("app").innerHTML = '<div class="loading">audit.json not available yet</div>';
+    return;
+  }
+  const app = document.getElementById("app");
+  app.innerHTML = "";
+
+  // proof of integrity
+  const ab = document.getElementById("anch");
+  (anch?.anchors || []).forEach(x=>{
+    ab.append(el(`<tr>
+      <td>${x.label}</td>
+      <td class="mono">${x.digest.slice(0,20)}…${x.digest.slice(-8)}</td>
+      <td class="${x.status==='confirmed'?'ok':'partial'}">${x.status}</td>
+      <td>${x.btc_block ?? "—"}</td>
+      <td><a href="/data/${x.ots}">receipt</a> · <a href="/data/${x.snapshot}">snapshot</a> · <a href="/data/ots/${x.label}.info.txt">info</a></td></tr>`));
+  });
+  if(!anch || !(anch.anchors||[]).length){
+    ab.append(el(`<tr><td colspan="5" style="color:var(--dim)">first anchor pending…</td></tr>`));
+  }
+
+  // collector cards
+  const cards = el(`<div class="cards"></div>`);
+  (a.collectors || []).forEach(c=>{
+    const cls = c.last_status === "ok" ? "ok" : "partial";
+    cards.append(el(`<div class="card">
+      <div class="k">${c.tool} · ${c.chain}</div>
+      <div class="v ${cls}">${c.last_status}</div>
+      <div class="s">last run ${c.last_run} UTC</div>
+      <div class="s">cursor ${String(c.cursor).slice(0,18)}…</div>
+      <div class="s">+${N(c.new_1h)} / 1h · +${N(c.new_24h)} / 24h</div>
+      <div class="s">${c.runs_24h} runs / 24h · ${c.errors_24h} errors</div>
+    </div>`));
+  });
+  cards.append(el(`<div class="card">
+    <div class="k">Cumulative (all chains)</div>
+    <div class="v">${N(s?.totals?.txs)}</div>
+    <div class="s">settlements · $${N(s?.totals?.volume_usdc)}</div>
+    <div class="s">${N(s?.totals?.buyers)} buyers · ${N(s?.totals?.sellers)} sellers</div>
+    <div class="s">updated ${s?.updated_at ?? a.generated_at}</div>
+  </div>`));
+  app.append(cards);
+
+  // aggregate counts
+  const ac = el(`<div class="panel"></div>`);
+  const at = el(`<table><thead><tr><th>aggregate table</th><th>rows</th><th>meaning</th></tr></thead><tbody></tbody></table>`);
+  const tb = at.querySelector("tbody");
+  const meaning = {
+    daily: "per-day, per-chain rollup (txs, volume)",
+    sellers: "unique payTo recipients with lifetime totals",
+    buyers: "unique paying wallets with lifetime totals",
+    edges: "buyer × seller relationships — the unbackfillable graph",
+    buckets: "payment size distribution",
+  };
+  Object.entries(a.aggregate_counts || {}).forEach(([k,v])=>{
+    tb.append(el(`<tr><td class="mono">${k}</td><td>${N(v)}</td><td style="white-space:normal;color:var(--dim)">${meaning[k]||""}</td></tr>`));
+  });
+  ac.append(at);
+  app.append(el(`<h2>Processed data inventory <em>· what exists after processing</em></h2>`));
+  app.append(ac);
+
+  // methodology
+  const m = document.getElementById("method");
+  (a.processing || []).forEach(p=>{
+    m.append(el(`<div class="method"><b>${p.stage}${p.chain ? " · "+p.chain : ""}</b><br>${p.method}</div>`));
+  });
+
+  // runs table
+  const rb = document.getElementById("runs");
+  (a.runs || []).forEach(r=>{
+    rb.append(el(`<tr>
+      <td>${r.ts}</td><td>${r.tool}</td><td>${r.chain}</td>
+      <td class="${r.status}">${r.status}</td>
+      <td class="mono">${String(r.cursor).slice(0,16)}…</td>
+      <td>${r.scanned ?? ""}</td>
+      <td>+${N(r.new_items)}</td>
+      <td>${N(r.totals_txs)}</td>
+      <td>${N(r.totals_volume)}</td>
+      <td>${r.duration_ms}</td></tr>`));
+  });
+
+  // MPP / Tempo monitor
+  const mb = document.getElementById("mpp");
+  if(mpp && mpp.latest){
+    const L = mpp.latest, mk = mpp.chain || {};
+    mb.append(el(`<tr>
+      <td colspan="7" style="white-space:normal;color:var(--dim)">
+        ${mk.name} (chain ${mk.chain_id}) via ${mk.api} — sampled ${L.api_ok ? "ok" : "API unreachable"}. Sellers: x402 ${mpp.sellers?.x402 ?? "—"} · mpp ${mpp.sellers?.mpp ?? "—"} · dual ${mpp.sellers?.dual ?? "—"} (of ${mpp.sellers?.probed_402 ?? "—"} probed 402 origins) · offers with quote: ${mpp.offers?.count ?? "—"}. Raw chain activity — not all txs are MPP payments.</td></tr>`));
+    (mpp.history || []).slice(-12).reverse().forEach(x=>{
+      if(!x.api_ok){ mb.append(el(`<tr><td>${x.ts}</td><td colspan="6" class="partial">API unreachable</td></tr>`)); return; }
+      mb.append(el(`<tr>
+        <td>${x.ts}</td><td class="mono">${N(x.block)}</td><td>${x.block_time_s}s</td>
+        <td>${N(x.txs_in_sample)} / ${x.sampled_blocks} blocks</td>
+        <td>${N(x.tx_per_min)}</td><td>~${N(x.est_daily_txs)}</td>
+        <td>${Object.entries(x.tx_types||{}).map(([k,v])=>k+" "+v).join(", ")||"—"}</td></tr>`));
+    });
+  } else {
+    mb.append(el(`<tr><td colspan="7" style="color:var(--dim)">mpp.json not available yet — first hourly sample pending</td></tr>`));
+  }
+
+  // USDT rail watch
+  const ub = document.getElementById("usdtr");
+  const uwH = (usw && usw.history) || [];
+  if(uwH.length){
+    uwH.slice(-12).reverse().forEach(x=>{
+      const p = x.plasma || {}, st = x.stable || {};
+      const pa = p.eip3009_auth_settlements ?? "—", sa = st.eip3009_auth_settlements ?? "—";
+      ub.append(el(`<tr>
+        <td>${x.probed_at ?? "—"}</td>
+        <td>${p.chain_tx_per_min ?? "—"}</td><td>${p.usdt0_txs ?? "—"}</td>
+        <td class="${pa>0?'ok':'dim'}">${pa}</td>
+        <td>${st.chain_tx_per_min ?? "—"}</td><td>${st.usdt0_txs ?? "—"}</td>
+        <td class="${sa>0?'ok':'dim'}">${sa}</td>
+        <td>${x.facilitator_x402_semanticpay_io ?? "—"}</td>
+        <td>${x.verdict ?? "—"}</td></tr>`));
+    });
+  } else {
+    ub.append(el(`<tr><td colspan="9" style="color:var(--dim)">usdt_watch.json not available yet — first monthly probe pending</td></tr>`));
+  }
+}
+main();
+</script>
+
+
+</body>
+</html>

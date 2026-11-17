@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>PayCensus — Leading Indicators (machine economy pulse)</title>
+<meta name="description" content="Leading indicators of the machine economy: seller growth, cross-protocol migration, offer prices, concentration — all already-collected data, Bitcoin-anchored daily.">
+<meta name="robots" content="index,follow">
+<link rel="icon" href="/favicon.ico">
+<style>
+:root{--bg:#0b0e14;--fg:#dfe5ee;--dim:#7b8494;--acc:#f6861f;--acc2:#5aa9ff;--panel:#121722;--line:#232b3a}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.55 ui-sans-serif,system-ui,"Segoe UI",Roboto,sans-serif}
+.wrap{max-width:1060px;margin:0 auto;padding:26px 18px 60px}
+header{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+h1{font-size:26px;margin:0;font-weight:700}
+h1 span{color:var(--dim);font-size:14px;font-weight:400}
+.badge{font-size:11px;color:var(--acc);border:1px solid #4a2e14;background:#1d1408;border-radius:999px;padding:3px 10px}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:12px;margin-top:14px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px}
+.card h3{margin:0 0 4px;font-size:13px;color:var(--dim);font-weight:600}
+.v{font-size:26px;font-weight:700;color:var(--fg)}
+.v small{font-size:13px;color:var(--dim);font-weight:400;margin-left:4px}
+.stage{font-size:10.5px;border-radius:999px;padding:1px 8px;border:1px solid var(--line);color:var(--dim)}
+.s1{color:var(--acc2);border-color:#2b3350} .s2{color:#7bd88f;border-color:#1e3d2a}
+.note{font-size:12px;color:var(--dim);margin-top:6px}
+.mono{font-family:ui-monospace,Consolas,monospace}
+.dim{color:var(--dim)}
+a{color:var(--acc2);text-decoration:none}
+a:hover{text-decoration:underline}
+.links{margin-top:22px;font-size:13px;color:var(--dim)}
+</style>
+</head>
+<body><div class="wrap">
+  <header>
+    <img src="/logo.png" alt="PayCensus logo" style="width:34px;height:34px;border-radius:50%;flex:0 0 auto">
+    <h1>PayCensus <span>Leading Indicators — machine economy pulse</span></h1>
+    <span class="badge">⛓ Bitcoin-anchored daily</span>
+  </header>
+  <p class="dim" style="font-size:13.5px">Every number here is <b>already-collected data, never a forecast</b>.
+  Counted (Base x402) and sampled (Tempo MPP) are never merged. The daily census files behind these
+  indicators are <b>Bitcoin-anchored</b> (OpenTimestamps) — cite with confidence:
+  <span class="mono">pip install paycensus && paycensus-verify --ots</span></p>
+  <div class="grid" id="g"><p class="dim">loading indicators.json…</p></div>
+  <h1>PayCensus <span>Daily Indices — deterministic, definition-first</span></h1>
+  <div class="grid" id="gi"><p class="dim">loading indices.json…</p></div>
+  <p class="dim" style="font-size:12.5px">MPI = tracked machine-payment settlement volume, base-100 chained to the census start (2026-10-31 = 100); headline uses the last complete UTC day. TVI = trust-verified entities / attributed registry entities (revocations subtracted). Both are deterministic ratios of Bitcoin-anchored data — no weights, no forecasts.</p>
+  <p class="links">Machine feed: <a href="data/indicators.json">indicators.json</a> ·
+  <a href="data/indices.json">indices.json</a> · <a href="data/mpp.json">mpp.json</a> · <a href="/">public panel</a> ·
+  <a href="directory.html">entity directory</a> · <a href="audit.html">audit</a> · <a href="https://trust.paycensus.com/">trust</a></p>
+</div>
+<script>
+const fmt = (v, u) => {
+  if (v === null || v === undefined) return "—";
+  if (u === "share") return (v * 100).toFixed(2) + "%";
+  if (u === "USD") return "$" + Number(v).toLocaleString("en-US", {maximumFractionDigits: 4});
+  if (typeof v === "number") return Number(v).toLocaleString("en-US", {maximumFractionDigits: 2});
+  if (typeof v === "object") return Object.entries(v).map(([k, c]) => k + " ×" + c).join(", ") || "none yet";
+  return String(v);
+};
+fetch("data/indicators.json?ts=" + Date.now()).then(r => r.json()).then(d => {
+  const g = document.getElementById("g");
+  g.innerHTML = "";
+  for (const i of d.indicators || []) {
+    const card = document.createElement("div");
+    card.className = "card";
+    card.innerHTML = `<h3>${i.label}</h3>
+      <div class="v">${fmt(i.value, i.unit)}<small>${i.unit !== "share" && i.unit !== "USD" ? i.unit : ""}</small></div>
+      <span class="stage s${i.stage}">stage ${i.stage}</span>
+      <div class="note">${i.note}</div>`;
+    g.append(card);
+  }
+  const f = document.createElement("p");
+  f.className = "dim";
+  f.style.fontSize = "12.5px";
+  f.textContent = `generated ${d.generated_at} · indicators are computed views over the Bitcoin-anchored census — the full history is never backfilled`;
+  document.querySelector(".links").before(f);
+}).catch(() => { document.getElementById("g").innerHTML = '<p class="dim">indicators.json not available yet</p>'; });
+
+fetch("data/indices.json?ts=" + Date.now()).then(r => r.json()).then(d => {
+  const gi = document.getElementById("gi");
+  gi.innerHTML = "";
+  const m = d.mpi || {}, t = d.tvi || {};
+  const card = (h, v, small, note) => {
+    const c = document.createElement("div");
+    c.className = "card";
+    c.innerHTML = `<h3>${h}</h3><div class="v">${v}<small>${small}</small></div><div class="note">${note}</div>`;
+    gi.append(c);
+  };
+  const dod = m.day_over_day_pct === null || m.day_over_day_pct === undefined
+    ? "" : `<span class="${m.day_over_day_pct >= 0 ? "ok" : "bad"}" style="font-size:14px"> ${m.day_over_day_pct >= 0 ? "▲" : "▼"} ${Math.abs(m.day_over_day_pct)}% d/d</span>`;
+  card("Machine Payment Index (MPI)",
+    m.value === undefined || m.value === null ? "—" : m.value.toLocaleString("en-US", {minimumFractionDigits: 2}),
+    " · base " + m.base_date + " = 100" + dod,
+    (m.definition || "") + (m.last_complete_day ? ` Value for ${m.last_complete_day} (last complete UTC day).` : ""));
+  card("Trust Verification Index (TVI)",
+    t.value_pct === undefined ? "—" : t.value_pct.toFixed(2) + "%",
+    "",
+    `${t.definition || ""} Currently: ${t.verified} verified · ${t.revoked} revoked · ${t.attributed_entities} attributed entities.`);
+}).catch(() => { document.getElementById("gi").innerHTML = '<p class="dim">indices.json not available yet</p>'; });
+</script>
+</body></html>

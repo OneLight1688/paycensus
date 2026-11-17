@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PayCensus — Explorer</title>
+<style>
+  :root{--bg:#0a0e14;--panel:#11161f;--panel2:#161d29;--line:#1f2937;--txt:#e5ecf5;--dim:#8b98ab;--ok:#5eead4;--acc:#818cf8}
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{background:var(--bg);color:var(--txt);font-family:'Segoe UI',system-ui,sans-serif}
+  .wrap{max-width:1100px;margin:0 auto;padding:36px 24px 64px}
+  h1{font-size:24px} h1 span{color:var(--dim);font-size:14px;font-weight:400;margin-left:10px}
+  .search{display:flex;gap:10px;margin:22px 0}
+  input{flex:1;background:var(--panel);border:1px solid var(--line);color:var(--txt);border-radius:8px;padding:12px 16px;font-family:Consolas,monospace;font-size:14px}
+  button{background:var(--ok);color:#06251f;border:0;border-radius:8px;padding:12px 22px;font-weight:700;cursor:pointer}
+  h2{font-size:15px;margin:28px 0 10px} h2 em{color:var(--dim);font-style:normal;font-size:13px}
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:16px;overflow-x:auto}
+  table{width:100%;border-collapse:collapse;font-size:12.5px}
+  th{text-align:left;color:var(--dim);font-weight:500;padding:6px 8px;border-bottom:1px solid var(--line);font-size:11px;white-space:nowrap}
+  td{padding:6px 8px;border-bottom:1px solid #182130;font-variant-numeric:tabular-nums}
+  .mono{font-family:Consolas,monospace} .right{text-align:right}
+  .addr{cursor:pointer;color:var(--acc)} .addr:hover{text-decoration:underline}
+  .muted{color:var(--dim);font-size:12px}
+  .err{color:var(--warn);padding:16px;font-size:13px}
+  a{color:var(--ok);text-decoration:none}
+  .cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin:14px 0}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:12px 14px}
+  .card .k{font-size:11px;color:var(--dim);text-transform:uppercase;letter-spacing:1px}
+  .card .v{font-size:18px;font-weight:700;margin-top:3px;font-variant-numeric:tabular-nums}
+</style>
+<script defer src="https://static.cloudflareinsights.com/beacon.min.js" data-cf-beacon='{"token": "3533e37c01944a7cbeb1d684a17a3184}'></script><link rel="icon" type="image/png" href="/favicon.ico"></head>
+<body>
+<div class="wrap">
+  <img src="/logo.png" alt="PayCensus logo" style="width:34px;height:34px;border-radius:50%;vertical-align:-8px;margin-right:10px"><h1>PayCensus <span>Explorer — who pays whom</span></h1>
+  <p class="muted" style="margin-top:6px;max-width:820px;line-height:1.6">Paste any wallet address to see its machine-payment footprint:
+  as a <b>seller</b> (who paid it, when, how much) or as a <b>buyer</b> (which sellers it pays — its spending profile).
+  Every number is derived on-chain from EIP-3009 settlements and is re-derivable by anyone.</p>
+  <p class="muted" style="margin-top:8px;max-width:820px;line-height:1.6">📏 <b>Data &amp; privacy boundaries.</b>
+  All amounts and addresses are public blockchain facts. Entity attribution (domain/title) comes from
+  <b>sellers' own public catalogs</b> — we only attribute addresses that are actively receiving settlements,
+  we never publish contact details (emails/phone), and buyer addresses are never matched to real-world identities.
+  Sellers can claim or delist their address anytime (opt-out honored within 24h).</p>
+
+  <div class="search">
+    <input id="addr" placeholder="0x… (Base EVM) or base58 (Solana)" spellcheck="false">
+    <button onclick="go()">Look up</button>
+  </div>
+
+  <div id="out"><h2>Top payment edges <em>· largest buyer→seller relationships</em></h2><div class="panel" id="edges"><table><thead>
+  <tr><th>Buyer</th><th>Seller</th><th>Chain</th><th class="right">Txs</th><th class="right">Volume $</th><th>First seen</th><th>Last seen</th></tr>
+  </thead><tbody></tbody></table></div></div>
+
+  <p class="muted" style="margin-top:20px">API: <a href="/api/edges?limit=10">/api/edges</a> ·
+  <a href="#" onclick="q('/api/seller?addr='+document.getElementById('addr').value);return false">/api/seller?addr=</a> ·
+  <a href="#" onclick="q('/api/buyer?addr='+document.getElementById('addr').value);return false">/api/buyer?addr=</a> —
+  all public, CORS-enabled, for commercial analysis and backtesting.</p>
+</div>
+
+<script>
+const N = n => (n ?? 0).toLocaleString("en-US", {maximumFractionDigits: 2});
+const A = a => `<span class="mono addr" onclick="document.getElementById('addr').value='${a}';go()">${a.slice(0,10)}…${a.slice(-6)}</span>`;
+
+async function loadEdges(){
+  const r = await fetch("/api/edges?limit=50").then(r=>r.json()).catch(()=>null);
+  const tb = document.querySelector("#edges tbody");
+  tb.innerHTML = "";
+  (r?.edges || []).forEach(e=>{
+    tb.insertAdjacentHTML("beforeend", `<tr><td>${A(e.buyer)}</td><td>${A(e.seller)}</td><td>${e.chain}</td>
+      <td class="right">${N(e.txs)}</td><td class="right">${N(e.volume)}</td><td>${e.first_day}</td><td>${e.last_day}</td></tr>`);
+  });
+}
+
+function chainsCards(chains){
+  return `<div class="cards">` + chains.map(c=>
+    `<div class="card"><div class="k">${c.chain}</div><div class="v">${N(c.txs)} txs</div>
+     <div class="muted">$${N(c.volume)} · ${c.first_day} → ${c.last_day}</div></div>`).join("") + `</div>`;
+}
+
+function sellerBlock(r){
+  let h = `<h2>Seller <span class="mono">${r.seller}</span></h2>` + chainsCards(r.chains);
+  if(r.entity && r.entity.domain){
+    h += `<div class="panel" style="margin-bottom:14px;border-left:3px solid var(--ok)">
+      <div style="font-size:11px;color:var(--dim);text-transform:uppercase;letter-spacing:1px">Identified entity</div>
+      <div style="font-size:15px;font-weight:600;margin:4px 0"><a href="${r.entity.domain}" target="_blank" rel="noopener">${r.entity.domain}</a></div>
+      <div style="font-size:13px;font-weight:600">${r.entity.title || ""}</div>
+      <div style="font-size:12px;color:var(--dim);margin-top:4px;line-height:1.5">${(r.entity.description||"").slice(0,300)}</div>
+      <div class="muted" style="margin-top:4px">source: ${r.entity.source} · first seen ${r.entity.first_seen}${r.entity.category ? " · category: " + r.entity.category : ""}</div>
+      ${r.entity.contact_channel ? '<div style="margin-top:6px;font-size:12px;color:#2e7d32;font-weight:600">✉ contact channel available</div>' : ""}</div>`;
+  } else {
+    h += `<div class="panel" style="margin-bottom:14px;border-left:3px solid var(--dim)">
+      <div style="font-size:11px;color:var(--dim);text-transform:uppercase;letter-spacing:1px">Identified entity</div>
+      <div class="muted" style="margin-top:4px;line-height:1.6">Not yet attributed — the entity layer covers a share of active sellers by design (only verifiable public storefronts are attached). Attribution runs continuously: origin-side 402 probing, public resource mapping. Sellers: <a href="https://paycensus.com/directory.html#claim">claim your profile</a> and <a href="https://trust.paycensus.com/verify.html">verify your domain</a> — both fully automated.</div></div>`;
+  }
+  h += `<h2>Daily volume <em>· per-day receipts (series starts 2026-10-31)</em></h2><div class="panel"><table><thead><tr><th>Day</th><th class="right">Txs</th><th class="right">Volume $</th></tr></thead><tbody>` +
+    r.daily.map(d=>`<tr><td>${d.day}</td><td class="right">${N(d.txs)}</td><td class="right">${N(d.volume)}</td></tr>`).join("") + `</tbody></table></div>`;
+  h += `<h2>Buyers <em>· source of payments (${r.buyers.length} shown)</em></h2><div class="panel"><table><thead><tr><th>Buyer</th><th>Chain</th><th class="right">Txs</th><th class="right">Volume $</th><th>First</th><th>Last</th></tr></thead><tbody>` +
+    r.buyers.map(b=>`<tr><td>${A(b.buyer)}</td><td>${b.chain}</td><td class="right">${N(b.txs)}</td><td class="right">${N(b.volume)}</td><td>${b.first_day}</td><td>${b.last_day}</td></tr>`).join("") + `</tbody></table></div>`;
+  return h;
+}
+
+function buyerBlock(r){
+  let h = `<h2>Buyer <span class="mono">${r.buyer}</span></h2>` + chainsCards(r.chains);
+  h += `<h2>Sellers it pays <em>· spending profile (${r.sellers.length} shown)</em></h2><div class="panel"><table><thead><tr><th>Seller</th><th>Chain</th><th class="right">Txs</th><th class="right">Volume $</th><th>First</th><th>Last</th></tr></thead><tbody>` +
+    r.sellers.map(s=>`<tr><td>${A(s.seller)}</td><td>${s.chain}</td><td class="right">${N(s.txs)}</td><td class="right">${N(s.volume)}</td><td>${s.first_day}</td><td>${s.last_day}</td></tr>`).join("") + `</tbody></table></div>`;
+  return h;
+}
+
+async function go(){
+  const a = document.getElementById("addr").value.trim();
+  if(!a) return;
+  document.getElementById("out").innerHTML = '<div class="muted">loading…</div>';
+  const [s, b] = await Promise.all([
+    fetch("/api/seller?addr="+encodeURIComponent(a)).then(r=>r.json()).catch(()=>null),
+    fetch("/api/buyer?addr="+encodeURIComponent(a)).then(r=>r.json()).catch(()=>null),
+  ]);
+  let h = "";
+  if(s && s.seller) h += sellerBlock(s);
+  if(b && b.buyer) h += buyerBlock(b);
+  document.getElementById("out").innerHTML = h || '<div class="err">Address not found in the index (it may not have any settlement we have counted yet — x402 or MPP).</div>';
+}
+document.getElementById("addr").addEventListener("keydown", e=>{ if(e.key==="Enter") go(); });
+loadEdges();
+</script>
+</body>
+</html>

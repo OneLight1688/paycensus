@@ -1,0 +1,16 @@
+__pycache__/
+*.pyc
+*.bak
+# secrets live ONLY on the server as dotfiles — never here
+.coldmail_token
+.smtp_*
+.github_token
+.pypi_token
+.trust_*
+.x_credentials
+.backup_passphrase
+ops/.*
+ops/*.csv
+# generated runtime data
+site/data/
+site/s/

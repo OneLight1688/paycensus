@@ -1,0 +1,193 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>PayCensus — Entity Directory (the registry)</title>
+<meta name="description" content="Unified cross-protocol directory of machine-payment sellers: x402 attribution + MPP offers, Bitcoin-anchored daily.">
+<meta name="robots" content="index,follow">
+<link rel="icon" href="/favicon.ico">
+<style>
+:root{--bg:#0b0e14;--fg:#dfe5ee;--dim:#7b8494;--acc:#f6861f;--acc2:#5aa9ff;--panel:#121722;--line:#232b3a}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.55 ui-sans-serif,system-ui,"Segoe UI",Roboto,sans-serif}
+.wrap{max-width:1060px;margin:0 auto;padding:26px 18px 60px}
+header{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+h1{font-size:26px;margin:0;font-weight:700}
+h1 span{color:var(--dim);font-size:14px;font-weight:400}
+.badge{font-size:11px;color:var(--acc);border:1px solid #4a2e14;background:#1d1408;border-radius:999px;padding:3px 10px}
+input,select{background:var(--panel);border:1px solid var(--line);color:var(--fg);border-radius:8px;padding:8px 10px;font-size:14px}
+table{width:100%;border-collapse:collapse;margin-top:12px}
+th,td{text-align:left;padding:7px 9px;border-bottom:1px solid var(--line);font-size:13.5px;vertical-align:top}
+th{color:var(--dim);font-weight:600;position:sticky;top:0;background:var(--bg)}
+tr:hover td{background:#161d2a}
+.mono{font-family:ui-monospace,Consolas,monospace;font-size:12px}
+.dim{color:var(--dim)}
+.pill{font-size:11px;border-radius:999px;padding:1px 8px;border:1px solid var(--line)}
+.px{color:var(--acc2)} .pm{color:#7bd88f}
+a{color:var(--acc2);text-decoration:none}
+a:hover{text-decoration:underline}
+.bar{height:5px;background:#1c2331;border-radius:3px;min-width:60px}
+.bar i{display:block;height:5px;background:var(--acc);border-radius:3px}
+#detail{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px;margin-top:12px;display:none}
+.links{margin-top:22px;font-size:13px;color:var(--dim)}
+dialog{background:var(--panel);color:var(--fg);border:1px solid var(--line);border-radius:10px;max-width:440px;width:92%}
+dialog input,dialog textarea{width:100%;margin:4px 0 10px;background:#0d1119;border:1px solid var(--line);color:var(--fg);border-radius:6px;padding:7px}
+.hp{position:absolute;left:-9999px}
+</style>
+</head>
+<body><div class="wrap">
+  <header>
+    <img src="/logo.png" alt="PayCensus logo" style="width:34px;height:34px;border-radius:50%;flex:0 0 auto">
+    <h1>PayCensus <span>Entity Directory — the registry</span></h1>
+    <span class="badge">⛓ Bitcoin-anchored daily</span>
+  </header>
+  <p class="dim" style="font-size:13.5px">Unified cross-protocol directory of machine-payment sellers: x402 attribution +
+  MPP offers, one entity per service. Built on the Bitcoin-anchored daily census.
+  Addresses are public on-chain data; attribution is each seller's own public storefront info.
+  <b>Contact information is never published.</b> Is this directory missing you?
+  <a href="#" onclick="claimOpen('','');return false">Claim your profile →</a></p>
+
+  <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">
+    <input id="q" placeholder="filter: name / domain / address / description…" style="flex:1;min-width:260px" oninput="render()">
+    <select id="cat" onchange="render()"><option value="">all categories</option></select>
+    <select id="proto" onchange="render()">
+      <option value="">all protocols</option><option value="x402">x402</option>
+      <option value="mpp">MPP</option><option value="dual">dual</option>
+    </select>
+  </div>
+
+  <table><thead><tr>
+    <th>entity</th><th>category</th><th>protocols</th><th>offers</th>
+    <th>txs</th><th>volume USDC</th><th></th>
+  </tr></thead><tbody id="rows"></tbody></table>
+  <p class="dim" id="foot"></p>
+
+  <div id="detail"></div>
+
+  <dialog id="claim">
+    <h3 style="margin:4px 0 10px">Claim / correct this profile</h3>
+    <p class="dim" style="font-size:12.5px;margin:0 0 8px">Tell us who you are and what to fix.
+    Claims are logged append-only; <b>domain verification itself is automatic and deterministic</b> —
+    do it now at <a href="https://trust.paycensus.com/verify.html" style="color:var(--acc)">trust.paycensus.com</a>
+    (one DNS TXT record, 3 public resolvers, no human review). We never publish your contact information.</p>
+    <input id="c_entity" class="mono" placeholder="entity id" readonly>
+    <input id="c_contact" placeholder="your contact (email or domain contact page)" maxlength="120">
+    <textarea id="c_msg" rows="3" placeholder="what to add or correct" maxlength="500"></textarea>
+    <input id="c_hp" class="hp" tabindex="-1" autocomplete="off">
+    <div style="display:flex;gap:8px;justify-content:flex-end">
+      <button onclick="claimClose()" style="background:none;border:none;color:var(--dim);cursor:pointer">cancel</button>
+      <button onclick="claimSend()" style="background:var(--acc);border:none;color:#111;border-radius:8px;padding:7px 14px;cursor:pointer;font-weight:600">send claim</button>
+    </div>
+    <p id="c_out" class="dim" style="font-size:12.5px"></p>
+  </dialog>
+
+  <p class="links">Machine feeds: <a href="data/directory.json">directory.json</a> ·
+  <a href="data/indicators.json">indicators.json</a> · <a href="/">public panel</a> ·
+  <a href="audit.html">audit</a> · <span title="the daily census files are Bitcoin-anchored via OpenTimestamps; this registry is derived from them">Bitcoin-anchored census</span></p>
+</div>
+<script>
+const el = h => { const t = document.createElement("template"); t.innerHTML = h.trim(); return t.content.firstChild; };
+const N = n => (n ?? 0).toLocaleString("en-US", {maximumFractionDigits: 2});
+const USDC = n => (n ?? 0).toLocaleString("en-US", {maximumFractionDigits: 2});
+let D = null, maxVol = 1, cur = null;
+
+fetch("data/directory.json?ts=" + Date.now()).then(r => r.json()).then(d => {
+  D = d;
+  maxVol = Math.max(...d.entities.map(e => e.totals.volume_usdc || 0), 1);
+  const cats = [...new Set(d.entities.map(e => e.category))].sort();
+  cats.forEach(c => document.getElementById("cat").append(el(`<option>${c}</option>`)));
+  render();
+  document.getElementById("foot").textContent =
+    `${d.count} entities · generated ${d.generated_at} · attribution = seller's own public storefront info · contact info never published`;
+}).catch(() => { document.getElementById("rows").innerHTML =
+  '<tr><td class="dim">directory.json not available yet</td></tr>'; });
+
+function proto(e){
+  const x = e.protocols.x402, m = e.protocols.mpp;
+  if (x && m) return '<span class="pill pm">x402 + MPP</span>';
+  if (m) return '<span class="pill pm">MPP</span>';
+  if (x) return '<span class="pill px">x402</span>';
+  return '<span class="pill dim">—</span>';
+}
+function render(){
+  const q = document.getElementById("q").value.toLowerCase();
+  const cat = document.getElementById("cat").value;
+  const pr = document.getElementById("proto").value;
+  const tb = document.getElementById("rows"); tb.innerHTML = "";
+  let n = 0;
+  for (const e of (D?.entities || [])) {
+    if (cat && e.category !== cat) continue;
+    if (pr === "dual" && !(e.protocols.x402 && e.protocols.mpp)) continue;
+    if (pr === "x402" && !e.protocols.x402) continue;
+    if (pr === "mpp" && !e.protocols.mpp) continue;
+    const hay = ((e.title || "") + " " + (e.domain || "") + " " + (e.id || "") + " " +
+                 (e.description || "")).toLowerCase();
+    if (q && !hay.includes(q)) continue;
+    if (++n > 200) break;
+    const tb_ = el(`<tr>
+      <td>${e.domain ? `<a href="https://${e.domain}" target="_blank" rel="noopener">${(e.title || e.domain).slice(0,60)}</a>` : `<span class="mono">${e.id.slice(0,18)}…</span> <span class="dim">(attribution pending)</span>`}
+          <div class="dim" style="font-size:11.5px">${(e.description || "").slice(0,90)}</div></td>
+      <td>${e.category}</td>
+      <td>${proto(e)}</td>
+      <td>${e.offers.length || "—"}</td>
+      <td class="mono">${N(e.totals.txs)}</td>
+      <td><div class="bar"><i style="width:${Math.max(2, (e.totals.volume_usdc || 0) / maxVol * 100)}%"></i></div><span class="mono">${USDC(e.totals.volume_usdc)}</span></td>
+      <td><a href="#" onclick="show('${e.id.replace(/'/g,"")}');return false">detail</a></td></tr>`);
+    tb.append(tb_);
+  }
+  if (!n) tb.innerHTML = '<tr><td colspan="7" class="dim">no match</td></tr>';
+}
+function show(id){
+  const e = (D?.entities || []).find(x => x.id === id);
+  if (!e) return;
+  cur = e;
+  const d = document.getElementById("detail");
+  d.style.display = "block";
+  d.innerHTML = `<h3 style="margin:2px 0 6px">${e.title || e.id} <span class="dim" style="font-size:13px">(${e.category})</span></h3>
+    <p style="margin:4px 0">${e.description || ""}</p>
+    <div class="mono" style="font-size:12px;line-height:1.8">${e.addresses.map(a =>
+      `⛓ <a href="explorer.html?addr=${a.addr}">${a.addr}</a> · ${N(a.chains.reduce((s,c)=>s+(c.txs||0),0))} txs · ${USDC(a.chains.reduce((s,c)=>s+(c.volume||0),0))} USDC · first ${e.first_day || "?"}`).join("<br>")}</div>
+    ${e.offers.length ? `<div style="margin-top:8px"><b>offers</b> <span class="dim">(from public 402 challenges)</span><pre class="mono" style="white-space:pre-wrap;background:#0d1119;border:1px solid var(--line);border-radius:8px;padding:8px;font-size:11.5px">${e.offers.map(o => JSON.stringify(o.mpp || o.x402)).join("\n")}</pre></div>` : ""}
+    <div id="trustbox" style="margin-top:10px"><span class="dim" style="font-size:12px">trust status: checking…</span></div>
+    <p><a href="https://trust.paycensus.com/verify.html?addr=${e.addresses[0]?.addr || ""}" style="background:var(--acc);border:none;color:#111;border-radius:8px;padding:7px 14px;cursor:pointer;font-weight:600;text-decoration:none">Get verified (domain check, $99/yr founding)</a>
+    <button onclick="claimOpen('${e.id.replace(/'/g,"")}','${(e.domain || "").replace(/'/g,"")}')" style="background:none;border:1px solid var(--line);color:var(--dim);border-radius:8px;padding:7px 14px;cursor:pointer">Claim / correct</button></p>`;
+  d.scrollIntoView({behavior: "smooth"});
+  const tb = document.getElementById("trustbox");
+  const a0 = e.addresses[0]?.addr;
+  if (a0) fetch("https://trust.paycensus.com/api/status?addr=" + encodeURIComponent(a0))
+    .then(r => r.json()).then(t => {
+      if (t.status === "verified") tb.innerHTML = '<span style="color:#4caf50;font-weight:600">✅ Verified</span> <span class="dim" style="font-size:12px">domain control since ' + (t.since || "?") + ' · <a href="https://trust.paycensus.com">trust.paycensus.com</a></span>';
+      else if (t.status === "revoked") tb.innerHTML = '<span style="color:#ef5350;font-weight:600">⛔ Verification revoked</span> <span class="dim" style="font-size:12px">see <a href="https://trust.paycensus.com/revocations.html">revocation list</a></span>';
+      else tb.innerHTML = '<span class="dim" style="font-size:12px">trust status: not verified — agents see an anonymous address</span>';
+    }).catch(() => { tb.innerHTML = '<span class="dim" style="font-size:12px">trust status: n/a</span>'; });
+  else tb.innerHTML = '<span class="dim" style="font-size:12px">trust status: n/a</span>';
+}
+function claimOpen(id, domain){
+  document.getElementById("c_entity").value = id || domain || "(general)";
+  document.getElementById("c_out").textContent = "";
+  document.getElementById("claim").showModal();
+}
+function claimClose(){ document.getElementById("claim").close(); }
+async function claimSend(){
+  const body = {
+    entity: document.getElementById("c_entity").value,
+    contact: document.getElementById("c_contact").value.slice(0, 120),
+    message: document.getElementById("c_msg").value.slice(0, 500),
+    hp: document.getElementById("c_hp").value,
+  };
+  if (!body.contact || !body.message) {
+    document.getElementById("c_out").textContent = "contact + message required"; return;
+  }
+  try {
+    const r = await fetch("/api/claim", {method: "POST",
+      headers: {"Content-Type": "application/json"}, body: JSON.stringify(body)});
+    const j = await r.json();
+    document.getElementById("c_out").textContent = j.ok
+      ? "received and logged — thank you. domain verification is self-serve and automatic: trust.paycensus.com/verify.html"
+      : ("error: " + (j.error || r.status));
+    if (j.ok) setTimeout(claimClose, 1800);
+  } catch (e) { document.getElementById("c_out").textContent = "network error — try again later"; }
+}
+if (location.hash === "#claim") claimOpen("", "");
+</script>
+</body></html>

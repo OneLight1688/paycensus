@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><title>PayCensus Ops (internal)</title>
+<meta name="robots" content="noindex,nofollow">
+<style>body{font-family:system-ui;max-width:900px;margin:24px auto;padding:0 16px;background:#12141a;color:#e8e8e8}
+h1{font-size:20px}h2{font-size:15px;border-bottom:1px solid #333;padding-bottom:4px}
+table{width:100%;border-collapse:collapse;font-size:13px}td,th{padding:4px 6px;border-bottom:1px solid #2a2d36;text-align:left}
+.right{text-align:right}.muted{color:#9aa0aa}.panel{background:#191c24;border:1px solid #2a2d36;border-radius:8px;padding:14px;margin-bottom:14px}
+.ver{float:right;color:#f6821f;border:1px solid #f6821f;border-radius:6px;padding:2px 10px;font-size:13px;font-weight:600}
+.ver small{color:#9aa0aa;font-weight:400;margin-left:6px}
+#hcrun{background:#f6821f;color:#12141a;border:0;border-radius:6px;padding:6px 14px;font-size:13px;font-weight:600;cursor:pointer}
+#hcrun:disabled{opacity:.5;cursor:wait}
+#hcrun:hover:not(:disabled){filter:brightness(1.1)}</style></head>
+<body>
+<h1>PayCensus internal ops <span class="muted">(noindex, basic-auth)</span> <span class="muted" style="font-size:12px">⛓ Bitcoin-anchored daily</span><span class="ver">v0.24.7<small>2026-11-14</small></span></h1>
+<div class="panel">
+  <h2 style="margin-top:0">System self-check <button id="hcrun">Run self-check</button> <span class="muted" style="font-size:12px">read-only diagnostics · cron, nginx, API, data freshness, anchoring chain, endpoints</span></h2>
+  <div id="hc" class="muted">not run yet this session</div>
+</div>
+<div class="panel">
+  <h2 style="margin-top:0">Visitors · server-side aggregation (human-filtered, CF-IPCountry)</h2>
+  <div id="vstats" class="muted">loading…</div>
+</div>
+<div class="panel">
+  <h2 style="margin-top:0">Visitors trend · daily time series</h2>
+  <p>
+  from <input type="date" id="vfrom">
+  to <input type="date" id="vto">
+  <button id="vdraw">Redraw</button>
+  <button id="v30">Last 30 days</button>
+  <button id="v90">Last 90 days</button>
+  <button id="vall">All</button>
+  </p>
+  <canvas id="vchart" width="960" height="320" style="max-width:100%;background:#12141a;border-radius:8px"></canvas>
+  <p class="muted">orange = human requests · blue = unique visitors (distinct CF-Connecting-IP) · grey = bot/scanner · source: visitors_history.json (backfill from 2026-11-04; 11-04 has no IP field so unique=0)</p>
+</div>
+<div class="panel">
+  <h2 style="margin-top:0">Leads tier board · internal full view</h2>
+  <div id="leads" class="muted">loading…</div>
+</div>
+<div class="panel">
+  <h2 style="margin-top:0">Contact pipeline · internal only (never public)</h2>
+  <div id="contacts" class="muted">contacts live in DB contacts table (role=115+, internal only)</div>
+</div>
+<script>
+const j = u => fetch(u).then(r=>r.json());
+document.getElementById("hcrun").onclick = function(){
+  const btn=this, out=document.getElementById("hc");
+  btn.disabled=true; btn.textContent="running… (~20s)";
+  out.innerHTML='<span class="muted">running self-check…</span>';
+  fetch("/api/health").then(r=>r.json()).then(d=>{
+    if(d.error){ out.innerHTML=`<span style="color:#ef5350">error: ${d.error}</span>`; btn.disabled=false; btn.textContent="Run self-check"; return; }
+    const color={pass:"#4caf50",warn:"#ffb300",fail:"#ef5350"};
+    const rows=d.checks.map(c=>`<tr><td style="width:64px"><span style="color:${color[c.status]};font-weight:700">${c.status.toUpperCase()}</span></td><td style="white-space:nowrap">${c.check}</td><td class="muted">${c.detail}</td></tr>`).join("");
+    out.innerHTML = `<p style="margin:6px 0">Overall: <b style="color:${color[d.overall]};font-size:15px">${d.overall.toUpperCase()}</b> · ${d.ran_at} · ${d.duration_s}s · ${d.version}</p>
+      <table><tbody>${rows}</tbody></table>`;
+    btn.disabled=false; btn.textContent="Run self-check";
+  }).catch(e=>{ out.innerHTML=`<span style="color:#ef5350">request failed: ${e}</span>`; btn.disabled=false; btn.textContent="Run self-check"; });
+};
+j("/data/visitors.json").then(d=>{
+  const c=Object.entries(d.human_by_country||{}).map(([k,v])=>`<tr><td>${k}</td><td class="right">${v}</td></tr>`).join("");
+  const pg=Object.entries(d.human_pages||{}).map(([k,v])=>`<tr><td>${k}</td><td class="right">${v}</td></tr>`).join("");
+  const r=Object.entries(d.human_referrers||{}).map(([k,v])=>`<tr><td>${k}</td><td class="right">${v}</td></tr>`).join("");
+  const a=Object.entries(d.data_api_consumers||{}).map(([k,v])=>`<tr><td>${k}</td><td class="right">${v}</td></tr>`).join("");
+  document.getElementById("vstats").innerHTML =
+    `<p>${d.totals.all_requests} requests · <b>${d.totals.human_requests} human</b> · <b>${d.totals.human_visitors||0} unique visitors</b> · ${d.totals.bot_or_scanner} bot/scanner · ${d.totals.self_excluded||0} self-excluded (${d.window})</p>
+     <table><thead><tr><th>Country</th><th class="right">Human</th></tr></thead><tbody>${c}</tbody></table>
+     <table><thead><tr><th>Visited page (human)</th><th class="right">Reqs</th></tr></thead><tbody>${pg}</tbody></table>
+     <table><thead><tr><th>Source (referrer; direct = no referrer)</th><th class="right">Reqs</th></tr></thead><tbody>${r}</tbody></table>
+     <table><thead><tr><th>Data/API path</th><th class="right">Reqs</th></tr></thead><tbody>${a}</tbody></table>`;
+});
+// ---- visitors trend chart ----
+const vbars=(r)=>({h:r.human_requests||0,u:r.human_visitors||0,b:r.bot_or_scanner||0});
+function vDraw(){
+  const c=document.getElementById("vchart"),x=c.getContext("2d");
+  const W=c.width,H=c.height;
+  x.fillStyle="#12141a";x.fillRect(0,0,W,H);
+  const f=document.getElementById("vfrom").value,t=document.getElementById("vto").value;
+  const rows=(window.VISHIST||[]).filter(r=>(!f||r.day>=f)&&(!t||r.day<=t));
+  const pad={l:46,r:14,t:16,b:26};
+  if(!rows.length){x.fillStyle="#9aa0aa";x.font="14px sans-serif";x.fillText("no data in this range",pad.l,60);return;}
+  const vmax=Math.max(10,...rows.map(r=>{const b=vbars(r);return Math.max(b.h,b.u,b.b);}));
+  const n=rows.length,slot=(W-pad.l-pad.r)/n,ph=H-pad.t-pad.b,bw=Math.max(2,slot*0.26);
+  for(let g=0;g<=4;g++){
+    const y=H-pad.b-ph*g/4;
+    x.strokeStyle="#232733";x.beginPath();x.moveTo(pad.l,y);x.lineTo(W-pad.r,y);x.stroke();
+    x.fillStyle="#9aa0aa";x.font="11px monospace";x.fillText(String(Math.round(vmax*g/4)),4,y+4);
+  }
+  const lblEvery=Math.max(1,Math.ceil(n/10));
+  rows.forEach((r,i)=>{
+    const b=vbars(r), bx=pad.l+i*slot;
+    x.fillStyle="#F6821F";x.fillRect(bx,H-pad.b-ph*b.h/vmax,bw,ph*b.h/vmax);
+    x.fillStyle="#4aa3ff";x.fillRect(bx+bw+1,H-pad.b-ph*b.u/vmax,bw,ph*b.u/vmax);
+    x.fillStyle="#5a6070";x.fillRect(bx+2*bw+2,H-pad.b-ph*b.b/vmax,bw,ph*b.b/vmax);
+    if(i===0||i===n-1||i%lblEvery===0){x.fillStyle="#9aa0aa";x.font="11px monospace";x.fillText(r.day.slice(5),bx,H-8);}
+  });
+  x.fillStyle="#9aa0aa";x.font="12px sans-serif";
+  x.fillText(n+" days · peak "+vmax,pad.l,pad.t+2);
+}
+function vRange(days){
+  const d=new Date(Date.now()-days*864e5).toISOString().slice(0,10);
+  document.getElementById("vfrom").value=d;
+  document.getElementById("vto").value="";
+  vDraw();
+}
+document.getElementById("vdraw").onclick=vDraw;
+document.getElementById("v30").onclick=()=>vRange(30);
+document.getElementById("v90").onclick=()=>vRange(90);
+document.getElementById("vall").onclick=()=>{document.getElementById("vfrom").value="";document.getElementById("vto").value="";vDraw();};
+j("/data/visitors_history.json").then(h=>{
+  window.VISHIST=h||[];
+  vRange(30);
+});
+j("/data/leads.json").then(d=>{
+  const t=Object.entries(d.tiers).map(([k,v])=>`<tr><td>${k}</td><td>${v.count}</td><td>${v.threshold}</td><td>${v.ready?"<b style='color:#4caf50'>READY</b>":"pending"}</td></tr>`).join("");
+  const c=d.contacts||{};
+  document.getElementById("leads").innerHTML =
+    `<table><thead><tr><th>Tier</th><th>Count</th><th>Threshold</th><th>Status</th></tr></thead><tbody>${t}</tbody></table>
+     <p class="muted">contacts: role=${c.role_unique||0} · unknown=${c.unknown_quarantined||0} · personal dropped=${c.personal_dropped||0}</p>`;
+});
+</script>
+</body></html>
