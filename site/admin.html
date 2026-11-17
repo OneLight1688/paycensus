@@ -1,0 +1,475 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="robots" content="noindex,nofollow">
+<title>Trust Admin — PayCensus</title>
+<style>
+*{box-sizing:border-box}
+body{font-family:system-ui;margin:0;background:#0e1015;color:#e8e8e8}
+.layout{display:grid;grid-template-columns:210px 1fr;min-height:100vh}
+aside{background:#12141a;border-right:1px solid #23262f;padding:16px 12px;position:sticky;top:0;height:100vh;overflow-y:auto}
+.brand{font-weight:700;margin-bottom:4px}
+.brand .muted{font-weight:400;font-size:11px;display:block;margin-bottom:12px}
+nav a{display:block;padding:9px 12px;border-radius:6px;color:#9aa0aa;text-decoration:none;font-size:14px;cursor:pointer;margin-bottom:2px}
+nav a:hover{background:#191c24;color:#e8e8e8}
+nav a.on{background:#f6821f;color:#12141a;font-weight:700}
+.sidefoot{margin-top:20px;font-size:11px;color:#5c626d}
+main{padding:20px 26px;max-width:1000px}
+h1{font-size:18px;margin:0 0 14px}
+h2{font-size:15px;margin:0 0 12px}
+a{color:#f6821f;text-decoration:none}
+.muted{color:#9aa0aa;font-size:13px}
+.mono{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12.5px}
+.panel{background:#12141a;border:1px solid #23262f;border-radius:8px;padding:16px;margin-bottom:16px}
+input{background:#0e1015;color:#e8e8e8;border:1px solid #23262f;border-radius:6px;padding:8px;margin:4px 0 10px;width:100%}
+input[style*="width:auto"]{width:auto}
+label{font-size:12px;color:#9aa0aa;display:block;margin-top:6px}
+button{background:#f6821f;color:#12141a;border:0;border-radius:6px;padding:8px 18px;font-weight:700;cursor:pointer}
+button:hover{filter:brightness(1.1)}
+button.sec{background:#23262f;color:#e8e8e8;font-weight:400}
+table{width:100%;border-collapse:collapse;font-size:12.5px}
+td,th{padding:5px 8px;border-bottom:1px solid #23262f;text-align:left;vertical-align:top}
+th{color:#9aa0aa;font-weight:600}
+.ok{color:#4caf50;font-weight:600}.bad{color:#ef5350;font-weight:600}.warn{color:#ffb300;font-weight:600}
+.pager{display:flex;gap:10px;align-items:center;margin-top:10px}
+.pager button{padding:5px 12px;font-size:13px}
+.pg{display:none}
+.pg.on{display:block}
+#msg{margin:8px 0;font-size:13px}
+</style></head>
+<body>
+<div class="layout">
+<aside>
+  <div class="brand"><img src="/logo.png" style="height:18px;vertical-align:middle;margin-right:6px" alt="">Trust Admin
+  <span class="muted">noindex · basic-auth · operator: PayCensus Labs</span></div>
+  <nav id="nav">
+    <a data-pg="config" class="on">① Stripe 配置</a>
+    <a data-pg="selfcheck">② 自检 Self-check</a>
+    <a data-pg="customers">③ 客户与徽章</a>
+    <a data-pg="anomalies">④ 异常清单</a>
+    <a data-pg="revenue">⑤ 收入与退款</a>
+    <a data-pg="usage">⑥ API 用量</a>
+    <a data-pg="oss">⑦ 开源触达</a>
+    <a data-pg="visitors">⑧ 访客统计</a>
+    <a data-pg="xposts">⑨ X 发布记录</a>
+    <a data-pg="sellers">⑩ Sellers CRM</a>
+  </nav>
+  <div class="sidefoot">admin v0.8.0 · Trust v0.19.0<br><a href="/">← Trust site</a></div>
+</aside>
+<main>
+
+<section id="pg-config" class="pg on">
+<h1>Stripe billing configuration</h1>
+<div class="panel">
+<div id="cfgview" class="muted">loading…</div>
+<h2>Update (blank = unchanged)</h2>
+<label>Publish key (pk_live_…)</label><input id="publish_key" autocomplete="off">
+<label>Restricted key (rk_live_…)</label><input id="restricted_key" type="password" autocomplete="off">
+<label>Webhook signing secret (whsec_…)</label><input id="webhook_secret" type="password" autocomplete="off">
+<label>Founding price ID (price_… $99/yr)</label><input id="price_founding" autocomplete="off">
+<label>List price ID (price_… $199/yr)</label><input id="price_list" autocomplete="off">
+<label>Verified+ price ID (price_… $49/mo)</label><input id="price_plus" autocomplete="off">
+<label>Self addresses for seal exemption (comma-separated)</label><input id="self_addrs" autocomplete="off">
+<button id="save">Save configuration</button>
+<button class="sec" onclick="location.reload()">Reload</button>
+<p class="muted" style="font-size:12px">Keys are validated against Stripe before anything is saved. Stored at /opt/paycensus/.trust_stripe (0600).</p>
+<div id="msg"></div>
+</div>
+
+<div class="panel">
+<h2 style="margin-top:0">X (Twitter) API keys</h2>
+<div id="xview" class="muted">loading…</div>
+<label>API key</label><input id="x_api_key" autocomplete="off">
+<label>API secret</label><input id="x_api_secret" type="password" autocomplete="off">
+<label>Access token</label><input id="x_access_token" autocomplete="off">
+<label>Access secret</label><input id="x_access_secret" type="password" autocomplete="off">
+<button id="xsave">Save X keys</button>
+<p class="muted" style="font-size:12px">Saved to /opt/paycensus/.x_credentials (0600). Live verification runs immediately after saving — the result shows below.</p>
+<div id="xmsg"></div>
+</div>
+
+<div class="panel">
+<h2 style="margin-top:0">OpenRouter API token (X 评论 LLM — 仅免费模型)</h2>
+<div id="orview" class="muted">loading…</div>
+<label>OpenRouter token</label><input id="or_token" type="password" autocomplete="off" placeholder="sk-or-v1-…">
+<button id="orsave">Save OpenRouter token</button>
+<p class="muted" style="font-size:12px">Saved to /opt/paycensus/.openrouter_token (0600). Live check runs immediately. Only x_comment.py uses it (free :free models, 13:40/21:10 UTC commentary posts) — the daily census digest does not.</p>
+<div id="ormsg"></div>
+</div>
+
+</section>
+
+<section id="pg-selfcheck" class="pg">
+<h1>Self-check</h1>
+<div class="panel">
+<p><label><input type="checkbox" id="mailtest" style="width:auto"> send a test mail (arrives at hello@paycensus.com)</label></p>
+<button id="run">Run self-check</button>
+<div id="results"></div>
+</div>
+</section>
+
+<section id="pg-customers" class="pg">
+<h1>Customers &amp; badge entitlements</h1>
+<div class="panel">
+<p><input id="csearch" placeholder="search addr / domain / contact" style="max-width:420px;display:inline-block;margin:0 8px 4px 0"><button class="sec" id="csearchgo">Search</button></p>
+<div id="customers" class="muted">click Search (empty = all)</div>
+<div class="pager">
+  <button class="sec" id="cprev">← Prev</button>
+  <span id="cpageinfo" class="muted">page —</span>
+  <button class="sec" id="cnext">Next →</button>
+  <select id="cper" style="background:#0e1015;color:#e8e8e8;border:1px solid #23262f;border-radius:6px;padding:5px">
+    <option>25</option><option>50</option><option>100</option>
+  </select>
+</div>
+</div>
+</section>
+
+<section id="pg-anomalies" class="pg">
+<h1>Anomalies watchlist</h1>
+<div class="panel">
+<p><button class="sec" id="anoload">Load anomalies</button></p>
+<div id="anomalies" class="muted">—</div>
+</div>
+</section>
+
+<section id="pg-revenue" class="pg">
+<h1>Revenue &amp; refunds</h1>
+<div class="panel">
+<div id="revenue" class="muted">click Load below</div>
+<p><button class="sec" id="revload">Load revenue</button></p>
+</div>
+<div class="panel">
+<h2>Refund</h2>
+<label>Subscription row id</label><input id="rsub" style="max-width:120px">
+<label>Amount in cents (blank = full)</label><input id="ramt" style="max-width:120px">
+<p><button id="refund">Issue refund</button> <span id="rmsg" class="muted"></span></p>
+</div>
+</section>
+
+<section id="pg-usage" class="pg">
+<h1>API usage</h1>
+<div class="panel">
+<p><button class="sec" id="useload">Load API usage</button></p>
+<div id="usage" class="muted">—</div>
+</div>
+</section>
+
+<section id="pg-oss" class="pg">
+<h1>Open-source reach</h1>
+<div class="panel">
+<p><button class="sec" id="ossload">Load OSS stats</button></p>
+<div id="oss" class="muted">—</div>
+</div>
+</section>
+
+<section id="pg-visitors" class="pg">
+<h1>Visitor statistics</h1>
+<div class="panel">
+<p><button class="sec" id="visload">Load visitors</button></p>
+<div id="visitors" class="muted">—</div>
+</div>
+<div class="panel">
+<h2 style="margin-top:0">Daily traffic trend — trust site (trust.paycensus.com)</h2>
+<p>
+from <input type="date" id="visfrom">
+to <input type="date" id="visto">
+<button class="sec" id="visdraw">Redraw</button>
+<button class="sec" id="vis30">Last 30 days</button>
+<button class="sec" id="vis90">Last 90 days</button>
+<button class="sec" id="visall">All</button>
+</p>
+<canvas id="vischart" width="960" height="320" style="max-width:100%;background:#12141a;border-radius:8px"></canvas>
+<p class="muted" id="vislegend">orange = human requests · blue = unique visitors (distinct CF-Connecting-IP/day) · grey = bot/scanner · trust-site series from visitors_history.json (starts 2026-11-08; main-site series lives in paycensus.com/ops.html)</p>
+</div>
+</section>
+
+<section id="pg-sellers" class="pg">
+<h1>Sellers CRM — attributed sellers (internal only)</h1>
+<div class="panel">
+<p class="muted">Source: census.db entities × sellers × contacts (read-only). Role mailboxes only — internal, never published. Geo = TLD-derived rough bucket, honest approximation. Use for tier-targeted outreach planning; email sends remain gated by warmup (&gt;=95% delivery).</p>
+<p><input id="ssearch" placeholder="search domain / addr / title / email" style="max-width:380px;display:inline-block;margin:0 8px 4px 0">
+<select id="stier" style="background:#0e1015;color:#e8e8e8;border:1px solid #23262f;border-radius:6px;padding:7px"><option value="">tier: all</option><option>T1</option><option>T2</option><option>T3</option></select>
+<select id="skind" style="background:#0e1015;color:#e8e8e8;border:1px solid #23262f;border-radius:6px;padding:7px"><option value="">kind: all</option><option>contract</option><option>eoa</option></select>
+<select id="sgeo" style="background:#0e1015;color:#e8e8e8;border:1px solid #23262f;border-radius:6px;padding:7px;max-width:160px"><option value="">geo: all</option><option>gTLD</option><option>US</option><option>UK</option><option>DE</option><option>EU</option><option>CN</option><option>HK</option><option>SG</option><option>JP</option><option>KR</option><option>IN</option><option>unknown</option></select>
+<button class="sec" id="ssearchgo">Search</button></p>
+<div id="sellers" class="muted">loading…</div>
+<div class="pager">
+  <button class="sec" id="sprev">← Prev</button>
+  <span id="spageinfo" class="muted">page —</span>
+  <button class="sec" id="snext">Next →</button>
+</div>
+</div>
+</section>
+
+<section id="pg-xposts" class="pg">
+<h1>X post log — daily publishing tracker</h1>
+<div class="panel">
+<p><button class="sec" id="xload">Refresh</button></p>
+<div id="xposts" class="muted">—</div>
+</div>
+</section>
+
+</main>
+</div>
+<script>
+// ---- navigation (auto-load panel data on open) ----
+const LOADERS = {};
+document.querySelectorAll("#nav a").forEach(a=>{
+  a.onclick=()=>{
+    document.querySelectorAll("#nav a").forEach(x=>x.classList.remove("on"));
+    document.querySelectorAll(".pg").forEach(x=>x.classList.remove("on"));
+    a.classList.add("on");
+    document.getElementById("pg-"+a.dataset.pg).classList.add("on");
+    const fn = LOADERS[a.dataset.pg];
+    if (fn) fn();
+  };
+});
+
+// ---- config ----
+fetch("/api/admin/config").then(r=>r.json()).then(d=>{
+  const el=document.getElementById("cfgview");
+  el.innerHTML="<table>"+Object.entries(d).map(([k,v])=>
+    "<tr><td class='mono'>"+k+"</td><td class='mono'>"+v+"</td></tr>").join("")+"</table>";
+});
+document.getElementById("save").onclick=async()=>{
+  const msg=document.getElementById("msg");msg.textContent="saving…";msg.className="";
+  const body={};
+  for(const f of ["publish_key","restricted_key","webhook_secret","price_founding","price_list","price_plus","self_addrs"]){
+    const v=document.getElementById(f).value.trim();if(v)body[f]=v;
+  }
+  const r=await fetch("/api/admin/config",{method:"POST",
+    headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
+  const d=await r.json();msg.textContent=JSON.stringify(d);msg.className=r.ok?"ok":"bad";
+  if(r.ok)setTimeout(()=>location.reload(),1200);
+};
+
+fetch("/api/admin/xkeys").then(r=>r.json()).then(d=>{
+  const el=document.getElementById("xview");
+  el.innerHTML="<table>"+Object.entries(d).map(([k,v])=>
+    "<tr><td class='mono'>"+k+"</td><td class='mono'>"+v+"</td></tr>").join("")+"</table>";
+});
+document.getElementById("xsave").onclick=async()=>{
+  const el=document.getElementById("xmsg");el.textContent="saving…";el.className="muted";
+  const body={};
+  for(const f of ["x_api_key","x_api_secret","x_access_token","x_access_secret"]){
+    const v=document.getElementById(f).value.trim();if(v)body[f]=v;
+  }
+  const r=await fetch("/api/admin/xkeys",{method:"POST",
+    headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
+  const d=await r.json();el.textContent=JSON.stringify(d);el.className=r.ok?"ok":"bad";
+  if(r.ok)setTimeout(()=>location.reload(),1500);
+};
+
+fetch("/api/admin/orkeys").then(r=>r.json()).then(d=>{
+  const el=document.getElementById("orview");
+  el.innerHTML="<table>"+Object.entries(d).map(([k,v])=>
+    "<tr><td class='mono'>"+k+"</td><td class='mono'>"+v+"</td></tr>").join("")+"</table>";
+});
+document.getElementById("orsave").onclick=async()=>{
+  const el=document.getElementById("ormsg");el.textContent="saving…";el.className="muted";
+  const t=document.getElementById("or_token").value.trim();
+  if(!t){el.textContent="paste a token first";el.className="bad";return;}
+  const r=await fetch("/api/admin/orkeys",{method:"POST",
+    headers:{"Content-Type":"application/json"},body:JSON.stringify({or_token:t})});
+  const d=await r.json();el.textContent=JSON.stringify(d);el.className=r.ok?"ok":"bad";
+  if(r.ok)setTimeout(()=>location.reload(),1500);
+};
+
+// ---- self-check ----
+document.getElementById("run").onclick=async()=>{
+  const el=document.getElementById("results");el.textContent="running…";
+  const mail=document.getElementById("mailtest").checked?"1":"0";
+  const r=await fetch("/api/admin/selftest?mail="+mail);const d=await r.json();
+  el.innerHTML="<table><tr><th></th><th>check</th><th>detail</th></tr>"+
+    d.results.map(x=>"<tr><td class='"+(x.ok?"ok":(x.ok===false?"bad":"warn"))+"'>"+
+      (x.ok?"PASS":(x.ok===false?"FAIL":"N/A"))+"</td><td>"+x.check+"</td><td class='muted'>"+
+      x.detail+"</td></tr>").join("")+"</table>"+
+    "<p class='"+(d.ok?"ok":"bad")+"'>overall: "+(d.ok?"PASS":"ATTENTION")+" · "+d.checked_at+"</p>";
+};
+
+// ---- customers (paginated, auto-load) ----
+let cpage=1;
+async function loadCustomers(){
+  const el=document.getElementById("customers");el.textContent="loading…";
+  const s=document.getElementById("csearch").value.trim();
+  const per=document.getElementById("cper").value;
+  const r=await fetch("/api/admin/customers?search="+encodeURIComponent(s)+
+    "&page="+cpage+"&per_page="+per);
+  const d=await r.json();cpage=d.page;
+  el.innerHTML="<table><tr><th>vid</th><th>domain</th><th>email</th><th>badge</th><th>badge since</th><th>seal</th><th>plan</th><th>sub</th><th>period end</th><th>last payment</th><th>alert</th></tr>"+
+    (d.customers.length?d.customers.map(x=>"<tr><td>"+x.vid+"</td><td class='mono'>"+(x.domain||"—")+"</td><td>"+x.email+"</td><td>"+x.badge+"</td><td>"+(x.verified_at||"—").slice(0,10)+"</td><td>"+x.seal+"</td><td>"+(x.plan||"—")+"</td><td>"+(x.sub_status||"—")+"</td><td>"+(x.current_period_end||"—").slice(0,10)+"</td><td class='mono'>"+(x.last_payment_usd!=null?"$"+x.last_payment_usd+" @ "+x.last_payment_at.slice(0,10):"—")+"</td><td class='"+(x.alert?"bad":"")+"'>"+(x.alert||"—")+"</td></tr>").join(""):"<tr><td colspan='11' class='muted'>no records</td></tr>")+
+    "</table>";
+  document.getElementById("cpageinfo").textContent="page "+d.page+"/"+d.pages+" · "+d.total+" total";
+}
+LOADERS.customers = loadCustomers;
+document.getElementById("csearchgo").onclick=()=>{cpage=1;loadCustomers();};
+document.getElementById("cprev").onclick=()=>{if(cpage>1){cpage--;loadCustomers();}};
+document.getElementById("cnext").onclick=()=>{cpage++;loadCustomers();};
+document.getElementById("cper").onchange=()=>{cpage=1;loadCustomers();};
+loadCustomers();  // initial load
+
+// ---- anomalies ----
+LOADERS.anomalies = async()=>{
+  const el=document.getElementById("anomalies");el.textContent="loading…";
+  const r=await fetch("/api/admin/anomalies");const d=await r.json();
+  const a=d.anomalies;
+  const sect=(title,rows,cols)=>{
+    if(!rows.length) return "<p class='muted'>"+title+": none ✓</p>";
+    return "<p><b>"+title+" ("+rows.length+")</b></p><table>"+
+      "<tr>"+cols.map(c=>"<th>"+c+"</th>").join("")+"</tr>"+
+      rows.map(x=>"<tr>"+cols.map(c=>"<td>"+(x[c]??"—")+"</td>").join("")+"</tr>").join("")+
+      "</table>";
+  };
+  el.innerHTML=
+    sect("Revoked", a.revoked, ["vid","domain","contact","verified_at"])+
+    sect("Strikes (verified with fail_count>0)", a.strikes, ["vid","domain","fail_count","contact","last_checked"])+
+    sect("Stale pending (nonce expired)", a.stale_pending, ["vid","domain","contact","expires_at"])+
+    sect("No contact email", a.no_contact, ["vid","domain","status"])+
+    sect("Subscription trouble", a.subs_attention, ["id","domain","plan","status","current_period_end"])+
+    "<p class='muted'>"+d.note+"</p>";
+};
+document.getElementById("anoload").onclick=LOADERS.anomalies;
+
+// ---- revenue & refund ----
+LOADERS.revenue = async()=>{
+  const el=document.getElementById("revenue");el.textContent="loading…";
+  const r=await fetch("/api/admin/revenue");const d=await r.json();
+  el.innerHTML="<table><tr><th>metric</th><th>value</th></tr>"+
+    "<tr><td>MRR (computed)</td><td class='mono'>$"+d.mrr_usd+"</td></tr>"+
+    "<tr><td>collected ("+d.window+")</td><td class='mono'>$"+d.collected_usd_latest100+"</td></tr>"+
+    "<tr><td>refunded (same window)</td><td class='mono'>$"+d.refunded_usd_latest100+"</td></tr>"+
+    "<tr><td>incomplete checkouts</td><td>"+d.incomplete_checkouts+"</td></tr>"+
+    "<tr><td>founding slots</td><td>"+d.founding_taken+" taken / "+d.founding_remaining+" left</td></tr>"+
+    "</table><p class='muted'>"+(d.active_by_plan||[]).map(p=>p.plan+": "+p.count+" × $"+p.price_usd+" = $"+p.monthly_usd+"/mo").join(" · ")+"</p>"+
+    "<h2>Day / week / month aggregates</h2><table><tr><th>bucket</th><th>paid</th><th>refunded</th><th>net</th><th>invoices</th></tr>"+
+    ["today","week","month","all"].map(b=>{const x=(d.buckets||{})[b]||{};return "<tr><td>"+b+"</td><td class='mono'>$"+(x.paid_usd??0)+"</td><td class='mono'>$"+(x.refunded_usd??0)+"</td><td class='mono'>"+(x.net_usd>=0?"":"-")+"$"+Math.abs(x.net_usd??0)+"</td><td>"+(x.count??0)+"</td></tr>";}).join("")+
+    "</table>"+
+    "<h2>Per customer</h2><table><tr><th>customer</th><th>email</th><th>domain</th><th>paid</th><th>refunded</th><th>invoices</th><th>last payment</th></tr>"+
+    ((d.by_customer||[]).length?d.by_customer.map(x=>"<tr><td class='mono'>"+(x.customer||"—")+"</td><td>"+(x.email||"—")+"</td><td>"+(x.domain||"—")+"</td><td class='mono'>$"+x.paid_usd.toFixed(2)+"</td><td class='mono'>$"+x.refunded_usd.toFixed(2)+"</td><td>"+(((x.invoices||[]).map(v=>"<a href='"+v.url+"' target='_blank' rel='noopener' class='mono'>"+v.created.slice(0,10)+"</a>").join(" · "))||x.count)+"</td><td class='mono'>$"+x.last_usd+" @ "+x.last_at.slice(0,16)+"</td></tr>").join(""):"<tr><td colspan='7' class='muted'>no payments yet</td></tr>")+
+    "</table>";
+};
+document.getElementById("revload").onclick=LOADERS.revenue;
+document.getElementById("refund").onclick=async()=>{
+  const el=document.getElementById("rmsg");el.textContent="…";el.className="muted";
+  const body={sub_id:parseInt(document.getElementById("rsub").value)};
+  const amt=document.getElementById("ramt").value.trim();
+  if(amt)body.amount_cents=parseInt(amt);
+  const r=await fetch("/api/admin/refund",{method:"POST",
+    headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
+  const d=await r.json();el.textContent=JSON.stringify(d);el.className=r.ok?"ok":"bad";
+};
+
+// ---- api usage ----
+LOADERS.usage = async()=>{
+  const el=document.getElementById("usage");el.textContent="loading…";
+  const r=await fetch("/api/admin/apiusage");const d=await r.json();
+  el.innerHTML="<p class='muted'>"+d.keys_active+" active keys · "+d.calls_today_total+" calls today</p><table><tr><th>id</th><th>label</th><th>plan</th><th>today</th><th>lifetime</th><th>last used</th></tr>"+
+    (d.keys.length?d.keys.map(x=>"<tr><td>#"+x.id+"</td><td>"+(x.label||"—")+"</td><td>"+x.plan+"</td><td>"+x.calls_today+"</td><td>"+x.calls_lifetime+"</td><td>"+(x.last_used||"—")+"</td></tr>").join(""):"<tr><td colspan='6' class='muted'>no keys yet</td></tr>")+"</table>";
+};
+document.getElementById("useload").onclick=LOADERS.usage;
+
+// ---- oss ----
+LOADERS.oss = async()=>{
+  const el=document.getElementById("oss");el.textContent="loading…";
+  const r=await fetch("/api/admin/oss");const d=await r.json();
+  el.innerHTML="<p>PyPI recent downloads (ALL agents incl. CI/scanner bots — NOT human-only): last day <b>"+((d.pypi&&d.pypi.last_day)??"—")+"</b> · week <b>"+((d.pypi&&d.pypi.last_week)??"—")+"</b> · month <b>"+((d.pypi&&d.pypi.last_month)??"—")+"</b></p>"+
+    "<p>GitHub (human signals): ★"+((d.github&&d.github.stars)??"—")+" · forks "+((d.github&&d.github.forks)??"—")+" · last push "+((d.github&&d.github.pushed_at)??"—")+"</p>"+
+    "<p class='muted' style='color:#9aa0aa;font-size:12px'>PyPI counts every pip install — bots/CI dominate, esp. the first 72h after publish (scanner indexing). Real-usage signals: API keys created (panel ③) and trust-site visitors (panel below).</p>";
+};
+document.getElementById("ossload").onclick=LOADERS.oss;
+
+// ---- visitors ----
+let VISHIST=[];
+function visBars(r){
+  return {h:r.trust_human||0,u:r.trust_human_visitors||0,b:r.trust_bots||0};
+}
+function visDraw(){
+  const c=document.getElementById("vischart"),x=c.getContext("2d");
+  const W=c.width,H=c.height;
+  x.fillStyle="#12141a";x.fillRect(0,0,W,H);
+  const f=document.getElementById("visfrom").value,t=document.getElementById("visto").value;
+  const rows=VISHIST.filter(r=>(!f||r.day>=f)&&(!t||r.day<=t));
+  const pad={l:46,r:14,t:16,b:26};
+  if(!rows.length){x.fillStyle="#9aa0aa";x.font="14px sans-serif";x.fillText("no data in this range",pad.l,60);return;}
+  const vmax=Math.max(10,...rows.map(r=>{const b=visBars(r);return Math.max(b.h,b.u,b.b);}));
+  const n=rows.length,slot=(W-pad.l-pad.r)/n,ph=H-pad.t-pad.b,bw=Math.max(2,slot*0.24);
+  for(let g=0;g<=4;g++){
+    const y=H-pad.b-ph*g/4;
+    x.strokeStyle="#232733";x.beginPath();x.moveTo(pad.l,y);x.lineTo(W-pad.r,y);x.stroke();
+    x.fillStyle="#9aa0aa";x.font="11px monospace";x.fillText(String(Math.round(vmax*g/4)),4,y+4);
+  }
+  const lblEvery=Math.max(1,Math.ceil(n/10));
+  rows.forEach((r,i)=>{
+    const b=visBars(r), bx=pad.l+i*slot;
+    x.fillStyle="#F6821F";x.fillRect(bx,H-pad.b-ph*b.h/vmax,bw,ph*b.h/vmax);
+    x.fillStyle="#4aa3ff";x.fillRect(bx+bw+1,H-pad.b-ph*b.u/vmax,bw,ph*b.u/vmax);
+    x.fillStyle="#5a6070";x.fillRect(bx+2*bw+2,H-pad.b-ph*b.b/vmax,bw,ph*b.b/vmax);
+    if(i===0||i===n-1||i%lblEvery===0){x.fillStyle="#9aa0aa";x.font="11px monospace";x.fillText(r.day.slice(5),bx,H-8);}
+  });
+  x.fillStyle="#9aa0aa";x.font="12px sans-serif";
+  x.fillText(n+" days · peak "+vmax,pad.l,pad.t+2);
+}
+function visRange(days){
+  const d=new Date(Date.now()-days*864e5).toISOString().slice(0,10);
+  document.getElementById("visfrom").value=d;
+  document.getElementById("visto").value="";
+  visDraw();
+}
+document.getElementById("visdraw").onclick=visDraw;
+document.getElementById("vis30").onclick=()=>visRange(30);
+document.getElementById("vis90").onclick=()=>visRange(90);
+document.getElementById("visall").onclick=()=>{document.getElementById("visfrom").value="";document.getElementById("visto").value="";visDraw();};
+LOADERS.visitors = async()=>{
+  const el=document.getElementById("visitors");el.textContent="loading…";
+  const r=await fetch("/api/admin/visitors");const d=await r.json();
+  const t=d.trust||{};
+  el.innerHTML="<p>Trust ("+(d.generated_at||"")+"): humans <b>"+(t.totals?t.totals.human_requests:"—")+"</b> requests · unique visitors "+(t.totals?t.totals.human_visitors:"—")+" · bots "+(t.totals?t.totals.bot_or_scanner:"—")+" · self-excluded "+(t.totals?t.totals.self_excluded:"—")+"</p>"+
+    "<p class='muted'>pages: "+JSON.stringify(t.human_pages||{})+"</p>"+
+    "<p class='muted'>trust API: "+JSON.stringify(t.trust_api_consumers||{})+"</p>";
+  VISHIST=d.history||[];
+  visRange(30);
+};
+document.getElementById("visload").onclick=LOADERS.visitors;
+
+// ---- x posts ----
+LOADERS.xposts = async()=>{
+  const el=document.getElementById("xposts");el.textContent="loading…";
+  const r=await fetch("/api/admin/xposts");const d=await r.json();
+  el.innerHTML="<p class='muted'>"+d.count+" posts tracked · account <a href='https://x.com/PayCensusLabs' target='_blank'>@PayCensusLabs</a></p>"+
+    "<table><tr><th>posted (UTC)</th><th>mode</th><th>text</th><th>link</th></tr>"+
+    (d.posts.length?d.posts.map(x=>"<tr><td>"+x.posted_at+"</td><td>"+(x.mode||"—")+"</td><td class='muted'>"+(x.text_head||"").replace(/</g,"&lt;")+"</td><td><a href='"+x.url+"' target='_blank'>open ↗</a></td></tr>").join(""):"<tr><td colspan='4'>"+(d.note||"no records")+"</td></tr>")+
+    "</table>";
+};
+document.getElementById("xload").onclick=LOADERS.xposts;
+
+// ---- sellers CRM ----
+let spage=1;
+const sload=async()=>{
+  const el=document.getElementById("sellers");el.textContent="loading…";
+  const q=document.getElementById("ssearch").value.trim();
+  const tier=document.getElementById("stier").value;
+  const geo=document.getElementById("sgeo").value;
+  const kind=document.getElementById("skind").value;
+  const r=await fetch("/api/admin/sellers?q="+encodeURIComponent(q)+
+    "&tier="+encodeURIComponent(tier)+"&geo="+encodeURIComponent(geo)+
+    "&kind="+encodeURIComponent(kind)+"&page="+spage+"&per=25");
+  const d=await r.json();spage=d.page;
+  el.innerHTML="<p class='muted'>"+d.total+" attributed sellers (of 16,604 on-chain — the rest have no domain yet) · page "+d.page+"/"+d.pages+" · geo = TLD-derived rough bucket</p>"+
+    "<table><tr><th>tier</th><th>kind</th><th>domain</th><th>title</th><th>geo</th><th>txs</th><th>volume $</th><th>role email</th><th>label</th></tr>"+
+    d.sellers.map(x=>"<tr><td>"+(x.tier||"—")+"</td><td>"+(x.kind||"—")+
+      "</td><td class='mono'>"+
+      (x.domain?"<a href='https://"+x.domain+"' target='_blank' rel='noopener'>"+x.domain+"</a>":"—")+
+      "</td><td class='muted'>"+((x.title||"—").replace(/</g,"&lt;")).slice(0,60)+
+      "</td><td>"+x.geo+"</td><td>"+(x.txs||0).toLocaleString()+"</td><td>"+
+      (x.volume||0).toFixed(2)+"</td><td class='mono'>"+(x.email||"—")+
+      "</td><td class='muted'>"+((x.label||"—").replace(/</g,"&lt;")).slice(0,50)+"</td></tr>").join("")+"</table>";
+  document.getElementById("spageinfo").textContent="page "+d.page+" / "+d.pages;
+};
+document.getElementById("ssearchgo").onclick=()=>{spage=1;sload();};
+document.getElementById("sprev").onclick=()=>{if(spage>1){spage--;sload();}};
+document.getElementById("snext").onclick=()=>{spage++;sload();};
+document.getElementById("stier").onchange=()=>{spage=1;sload();};
+document.getElementById("sgeo").onchange=()=>{spage=1;sload();};
+document.getElementById("skind").onchange=()=>{spage=1;sload();};
+LOADERS.sellers = sload;
+</script>
+</body></html>

@@ -778,6 +778,62 @@ def x_selfcheck():
     return res
 
 
+OR_TOKEN = "/opt/paycensus/.openrouter_token"
+OR_PLACEHOLDER = "PASTE-YOUR-OPENROUTER-TOKEN-HERE"
+
+
+def or_masked():
+    try:
+        t = open(OR_TOKEN).read().strip()
+    except OSError:
+        t = ""
+    if not t:
+        return {"OR_token": "(not set)", "_file": "missing", "_configured": "no"}
+    if t == OR_PLACEHOLDER:
+        return {"OR_token": "(placeholder)", "_file": "readable",
+                "_configured": "no"}
+    return {"OR_token": t[:8] + "…" + t[-4:], "_file": "readable",
+            "_configured": "yes"}
+
+
+def or_write(token):
+    """Save the OpenRouter token (0600). (ok, error)."""
+    try:
+        with open(OR_TOKEN, "w") as f:
+            f.write(token.strip() + "\n")
+        os.chmod(OR_TOKEN, 0o600)
+        return True, ""
+    except OSError as ex:
+        return False, str(ex)[:200]
+
+
+def or_selfcheck():
+    """Live check against OpenRouter /api/v1/auth/key (free, no quota use)."""
+    try:
+        t = open(OR_TOKEN).read().strip()
+    except OSError:
+        t = ""
+    if not t or t == OR_PLACEHOLDER:
+        return {"check": "openrouter_token", "ok": False,
+                "detail": "not configured yet (placeholder/missing) — "
+                          "x_comment.py will skip until a real token is saved"}
+    import urllib.request as _u
+    try:
+        req = _u.Request("https://openrouter.ai/api/v1/auth/key",
+                         headers={"Authorization": "Bearer " + t})
+        with _u.urlopen(req, timeout=15) as r:
+            d = json.loads(r.read().decode("utf-8", "replace"))
+        data = d.get("data") or {}
+        usage = data.get("usage")
+        lim = data.get("limit")
+        return {"check": "openrouter_token", "ok": True,
+                "detail": (f"live key OK — usage ${usage or 0}, "
+                           f"limit {lim if lim is not None else 'none (free-tier)'}")}
+    except Exception as ex:  # noqa: BLE001
+        return {"check": "openrouter_token", "ok": False,
+                "detail": f"live check failed: {str(ex)[:150]}"}
+
+
 def indices_anchor_check():
     """BTC-anchoring self-check for the indices feed (MPI/TVI).
 
@@ -1934,6 +1990,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self.json_out(200, admin_xposts())
             if path == "/api/admin/xkeys":
                 return self.json_out(200, x_masked())
+            if path == "/api/admin/orkeys":
+                return self.json_out(200, or_masked())
             if path == "/api/admin/anomalies":
                 conn = db()
                 out = admin_anomalies(conn)
@@ -2349,6 +2407,21 @@ class Handler(BaseHTTPRequestHandler):
                     "live_check": {"ok": xres["ok"], "detail": xres["detail"]},
                     "note": "live verification ran immediately — next daily "
                             "post will use the new credentials"})
+            if path == "/api/admin/orkeys":
+                tok = (body.get("or_token") or "").strip()
+                if not tok:
+                    conn.close()
+                    return self.json_out(400, {"error": "or_token required"})
+                ok, err = or_write(tok)
+                conn.close()
+                if not ok:
+                    return self.json_out(500, {"error": err})
+                res = or_selfcheck()
+                return self.json_out(200, {
+                    "ok": True, "config": or_masked(),
+                    "live_check": {"ok": res["ok"], "detail": res["detail"]},
+                    "note": "saved to /opt/paycensus/.openrouter_token (0600) "
+                            "— next commentary slot (13:40/21:10 UTC) uses it"})
             if path == "/api/admin/refund":
                 try:
                     sub_id = int(body.get("sub_id") or 0)
