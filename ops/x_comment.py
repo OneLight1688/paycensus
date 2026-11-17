@@ -87,22 +87,24 @@ def openrouter_token():
     return t
 
 
-def pick_model(token):
-    """First available FREE model only. Paid models are never selected."""
+def pick_models(token):
+    """Ordered FREE-model candidates only. Paid models are never selected."""
     d = http_json("https://openrouter.ai/api/v1/models") or {}
     free_ids = {m.get("id") for m in d.get("data", [])
                 if str(m.get("id", "")).endswith(":free")}
-    for m in PREFERRED_MODELS:
-        if m in free_ids:
-            return m
-    return next(iter(sorted(free_ids)), None)
+    cands = [m for m in PREFERRED_MODELS if m in free_ids]
+    cands += sorted(free_ids - set(cands))
+    return cands[:6]
 
 
 def llm_tweet(token, model, system, user):
     assert model.endswith(":free"), "paid model refused by policy"
+    # reasoning-style free models burn tokens on hidden thinking — give room
+    # and ask to exclude reasoning where supported
     body = json.dumps({"model": model,
-                       "max_tokens": 200,
+                       "max_tokens": 800,
                        "temperature": 1.0,
+                       "reasoning": {"exclude": True},
                        "messages": [{"role": "system", "content": system},
                                     {"role": "user", "content": user}]}).encode()
     req = urllib.request.Request(
@@ -112,7 +114,7 @@ def llm_tweet(token, model, system, user):
                  "HTTP-Referer": "https://paycensus.com",
                  "X-Title": "PayCensus"})
     try:
-        with urllib.request.urlopen(req, timeout=60) as r:
+        with urllib.request.urlopen(req, timeout=90) as r:
             d = json.loads(r.read().decode("utf-8", "replace"))
         if d.get("error"):
             log(f"llm error ({model}): {str(d['error'])[:140]}")
@@ -233,15 +235,22 @@ def do_post(state, dry=False):
             "where machine payments / the agentic economy is heading. Ground "
             "every claim in the material above; opinions are welcome, "
             "invented facts are not.")
-    model = pick_model(token)
-    if not model:
+    models = pick_models(token)
+    if not models:
         log("no free model available — skip (policy: never use paid models)")
         return False
-    text = llm_tweet(token, model, SYSTEM, user)
+    text = ""
+    used_model = ""
+    for model in models:  # empty/truncated responses -> try next free model
+        text = llm_tweet(token, model, SYSTEM, user)
+        used_model = model
+        if text and len(text) <= 280:
+            break
+        text = ""
     if not text or len(text) > 280:
-        log(f"llm output unusable (len={len(text)}) — skip")
+        log(f"llm output unusable across {len(models)} free models — skip")
         return False
-    log(f"model={model} -> {text[:110]!r}")
+    log(f"model={used_model} -> {text[:110]!r}")
     if dry:
         print("DRY-RUN tweet:", text)
         return True
