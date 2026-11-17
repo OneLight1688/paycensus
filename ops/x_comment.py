@@ -314,7 +314,9 @@ def do_post(state, dry=False):
         return False
     text = ""
     used_model = ""
-    for model in models:  # empty/truncated responses -> try next free model
+    for model in models[:4]:  # empty/429 -> try next free model, spaced out
+        if used_model:
+            time.sleep(8)  # free-tier rpm: don't self-inflict 429s
         text = llm_tweet(token, model, SYSTEM, user)
         used_model = model
         if text and len(text) <= 280:
