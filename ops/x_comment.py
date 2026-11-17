@@ -26,12 +26,14 @@ Run: python3 x_comment.py --auto   # cron wake call
 """
 import json
 import random
+import re
 import sys
 import time
 import urllib.error
 import urllib.parse
 import urllib.request
-from datetime import datetime, timezone
+import xml.etree.ElementTree as ET
+from datetime import datetime, timezone, timedelta
 
 sys.path.insert(0, "/opt/paycensus")
 sys.path.insert(0, "/opt/paycensus/pylibs")
@@ -213,19 +215,78 @@ def ensure_schedule(state):
     return sch
 
 
+def hot_news():
+    """Trending headlines (past 36h) from free RSS feeds — the 蹭热点 flavor.
+
+    Sources: Google News RSS (broad: crypto/stablecoin/AI-agents) +
+    Cointelegraph RSS (crypto-native). Returns [{title, link, source, ts}].
+    """
+    out = []
+    feeds = [
+        ("GoogleNews", "https://news.google.com/rss/search?q="
+         + urllib.parse.quote("cryptocurrency OR stablecoin OR \"AI agents\" OR \"agentic payments\"")
+         + "&hl=en-US&gl=US&ceid=US:en"),
+        ("Cointelegraph", "https://cointelegraph.com/rss"),
+    ]
+    cutoff = datetime.now(timezone.utc) - timedelta(hours=36)
+    for source, url in feeds:
+        try:
+            req = urllib.request.Request(url, headers={
+                "User-Agent": "Mozilla/5.0 (PayCensus; +https://paycensus.com)"})
+            with urllib.request.urlopen(req, timeout=15) as r:
+                root = ET.fromstring(r.read(500000))
+            for item in root.iter("item"):
+                title = (item.findtext("title") or "").strip()
+                link = (item.findtext("link") or "").strip()
+                pub = item.findtext("pubDate") or ""
+                # Google News titles end with " - Outlet" — strip the suffix
+                clean = re.sub(r"\s+-\s+[^-]{2,40}$", "", title).strip()
+                if not clean or len(clean) < 25:
+                    continue
+                try:
+                    dt = datetime.strptime(pub[:25].strip(),
+                                           "%a, %d %b %Y %H:%M:%S").replace(tzinfo=timezone.utc)
+                except ValueError:
+                    dt = datetime.now(timezone.utc)  # undated (CT feed): keep
+                if dt < cutoff:
+                    continue
+                out.append({"title": clean, "link": link, "source": source})
+        except Exception as exc:  # noqa: BLE001
+            log(f"hot_news feed {source} fail: {str(exc)[:80]}")
+    seen = set()
+    uniq = []
+    for n in out:
+        key = n["title"].lower()[:60]
+        if key not in seen:
+            seen.add(key)
+            uniq.append(n)
+    return uniq
+
+
 def build_anchor(state, stories, facts):
-    """Random flavor: story-take when fresh material exists, else data take."""
-    if stories and random.random() < 0.7:
+    """Flavor lottery (user 2026-11-17: 蹭热点新闻模块):
+    ~45% HN niche story, ~35% trending mainstream/crypto news, ~20% census
+    data observation — so the timeline reads like a real analyst's mix."""
+    news = hot_news()
+    roll = random.random()
+    if news and roll < 0.35:
+        n = random.choice(news[:8])
+        anchor_text = (f"Trending right now ({n['source']}): '{n['title']}'")
+        return anchor_text, None, n["link"]
+    if stories and roll < 0.80:
         s = random.choice(stories[:4])
         return (f"Real recent story being discussed (Hacker News, {s['points']} points): "
-                f"'{s['title']}'", s["id"])
+                f"'{s['title']}'", s["id"], None)
     if facts:
-        return facts, None
+        return facts, None, None
+    if news:
+        n = news[0]
+        return f"Trending right now ({n['source']}): '{n['title']}'", None, n["link"]
     if stories:
         s = stories[0]
         return (f"Real recent story being discussed (Hacker News): '{s['title']}'",
-                s["id"])
-    return "", None
+                s["id"], None)
+    return "", None, None
 
 
 def do_post(state, dry=False):
@@ -236,7 +297,7 @@ def do_post(state, dry=False):
     used = set(state.get("used_story_ids", []))
     stories = [s for s in hn_stories() if s["id"] not in used]
     facts = census_facts()
-    anchor, anchor_id = build_anchor(state, stories, facts)
+    anchor, anchor_id, news_link = build_anchor(state, stories, facts)
     if not anchor:
         log("no anchor material — skip")
         return False
@@ -244,7 +305,9 @@ def do_post(state, dry=False):
     user = (anchor + "\n\nWrite ONE tweet: your take on what this says about "
             "where machine payments / the agentic economy is heading. Ground "
             "every claim in the material above; opinions are welcome, "
-            "invented facts are not.")
+            "invented facts are not. If this is a headline you may react as "
+            "someone who just saw the news — do not pretend to have read the "
+            "full article or cite details beyond the headline.")
     models = pick_models(token)
     if not models:
         log("no free model available — skip (policy: never use paid models)")
@@ -260,6 +323,11 @@ def do_post(state, dry=False):
     if not text or len(text) > 280:
         log(f"llm output unusable across {len(models)} free models — skip")
         return False
+    # news flavor: humans share the link ~60% of the time (X counts any URL
+    # as 23 chars, so reserve that budget)
+    if news_link and random.random() < 0.6:
+        if len(text) + 1 + 23 <= 280:
+            text = text + " " + news_link
     log(f"model={used_model} -> {text[:110]!r}")
     if dry:
         print("DRY-RUN tweet:", text)
