@@ -2,24 +2,30 @@
 # -*- coding: utf-8 -*-
 """PayCensus X commentary — human-voice takes between the daily index posts.
 
-Design (user brief 2026-11-17): the 07:05 UTC daily census digest is a fixed
-number card; this script interleaves 1-2 "human" commentary posts per day
-about machine payments / crypto / AI-agent developments.
+User rules (2026-11-17, refined same day):
+  1. FREE LLMs only — model id must end with ":free"; paid models are never
+     called even as fallback. Token is the user's OpenRouter account,
+     editable in the admin panel (Trust Admin -> OpenRouter API token).
+  2. 2-4 posts/day at RANDOM times, text-only, human-like rhythm. The 07:05
+     UTC census digest (with chart) is a separate script and keeps its image.
+
+Scheduling: on the first wake of each UTC day we draw a random schedule of
+2-4 times inside 06:30-23:00 UTC (>=2h apart). A wake cron (every 30 min)
+fires a post when a scheduled slot comes due (with small natural jitter and
+a 90-min anti-burst gap). Missed slots (>40 min late) are dropped, not
+posted late — real humans don't post at exact clock times either.
 
 Grounding rule: the LLM may only comment on REAL material we feed it —
 fresh Hacker News stories (Algolia API, no key) and our own census numbers.
 It is forbidden to invent events, numbers, or announcements. No price
 predictions, no financial advice (identity/promise red lines).
 
-LLM: OpenRouter FREE models only (user's account). Token lives in
-/opt/paycensus/.openrouter_token (chmod 600, user-editable). Missing or
-placeholder token -> graceful skip, cron stays green.
-
-Run: python3 x_comment.py [--dry-run]
-Cron: 13:40 & 21:10 UTC (away from 07:05 digest)
+Run: python3 x_comment.py --auto   # cron wake call
+     python3 x_comment.py --dry-run
+     python3 x_comment.py          # manual: post now
 """
 import json
-import os
+import random
 import sys
 import time
 import urllib.parse
@@ -31,7 +37,6 @@ sys.path.insert(0, "/opt/paycensus/pylibs")
 
 TOKEN_FILE = "/opt/paycensus/.openrouter_token"
 STATE = "/var/lib/paycensus/x_comment_state.json"
-X_POSTS = "/var/lib/paycensus/x_posts.json"  # history via x_post.record_post
 LOG = "/var/lib/paycensus/x.log"
 PLACEHOLDER = "PASTE-YOUR-OPENROUTER-TOKEN-HERE"
 
@@ -44,6 +49,10 @@ PREFERRED_MODELS = [
 ]
 HN_QUERIES = ["AI agents", "stablecoin", "crypto payments", "x402",
               "agentic AI", "machine payments", "microtransactions"]
+WINDOW_START_MIN = int(6.5 * 60)   # 06:30 UTC
+WINDOW_END_MIN = int(23.0 * 60)    # 23:00 UTC
+MIN_GAP_MIN = 120                  # between scheduled slots
+MIN_BURST_GAP_S = 90 * 60          # anti-burst: 90 min between real posts
 
 
 def log(msg):
@@ -79,22 +88,21 @@ def openrouter_token():
 
 
 def pick_model(token):
-    """First available FREE model, preferring the known-good list."""
+    """First available FREE model only. Paid models are never selected."""
     d = http_json("https://openrouter.ai/api/v1/models") or {}
     free_ids = {m.get("id") for m in d.get("data", [])
                 if str(m.get("id", "")).endswith(":free")}
     for m in PREFERRED_MODELS:
         if m in free_ids:
             return m
-    for m in sorted(free_ids):
-        return m
-    return None
+    return next(iter(sorted(free_ids)), None)
 
 
 def llm_tweet(token, model, system, user):
+    assert model.endswith(":free"), "paid model refused by policy"
     body = json.dumps({"model": model,
                        "max_tokens": 200,
-                       "temperature": 0.9,
+                       "temperature": 1.0,
                        "messages": [{"role": "system", "content": system},
                                     {"role": "user", "content": user}]}).encode()
     req = urllib.request.Request(
@@ -106,15 +114,18 @@ def llm_tweet(token, model, system, user):
     try:
         with urllib.request.urlopen(req, timeout=60) as r:
             d = json.loads(r.read().decode("utf-8", "replace"))
+        if d.get("error"):
+            log(f"llm error ({model}): {str(d['error'])[:140]}")
+            return ""
         txt = (d.get("choices") or [{}])[0].get("message", {}).get("content", "")
         return (txt or "").strip().strip('"')
     except Exception as exc:  # noqa: BLE001
-        log(f"llm fail ({model}): {str(exc)[:100]}")
+        log(f"llm fail ({model}): {str(exc)[:120]}")
         return ""
 
 
 def hn_stories():
-    """Fresh real stories (past 10 days) the take can anchor on."""
+    """Fresh real stories (past 10 days) a take can anchor on."""
     cutoff = int(time.time()) - 10 * 86400
     out = []
     for q in HN_QUERIES:
@@ -127,10 +138,7 @@ def hn_stories():
             oid = h.get("objectID")
             if title and oid:
                 out.append({"id": oid, "title": title,
-                            "points": h.get("points") or 0,
-                            "url": h.get("url") or "",
-                            "query": q})
-    # dedup by objectID, strongest first
+                            "points": h.get("points") or 0})
     seen = {}
     for s in out:
         if s["id"] not in seen or s["points"] > seen[s["id"]]["points"]:
@@ -175,51 +183,68 @@ SYSTEM = (
 )
 
 
-def main():
-    dry = "--dry-run" in sys.argv
-    token = openrouter_token()
-    if not token:
-        log("openrouter token not configured (placeholder/missing) — skip")
-        return
+def ensure_schedule(state):
+    """Once per UTC day: draw 2-4 random slots in the active window."""
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    sch = state.get("schedule") or {}
+    if sch.get("date") == today:
+        return sch
+    n = random.randint(2, 4)
+    for _ in range(200):
+        mins = sorted(random.sample(range(WINDOW_START_MIN, WINDOW_END_MIN), n))
+        if all(b - a >= MIN_GAP_MIN for a, b in zip(mins, mins[1:])):
+            break
+    sch = {"date": today, "times": [f"{m // 60:02d}:{m % 60:02d}" for m in mins],
+           "done": 0}
+    state["schedule"] = sch
+    log(f"today's schedule drawn: {sch['times']}")
+    return sch
 
-    state = {}
-    try:
-        state = json.load(open(STATE))
-    except Exception:  # noqa: BLE001
-        pass
-    used = set(state.get("used_story_ids", []))
 
-    stories = [s for s in hn_stories() if s["id"] not in used]
-    facts = census_facts()
-
-    anchor = ""
+def build_anchor(state, stories, facts):
+    """Random flavor: story-take when fresh material exists, else data take."""
+    if stories and random.random() < 0.7:
+        s = random.choice(stories[:4])
+        return (f"Real recent story being discussed (Hacker News, {s['points']} points): "
+                f"'{s['title']}'", s["id"])
+    if facts:
+        return facts, None
     if stories:
         s = stories[0]
-        anchor = (f"Real recent story being discussed (Hacker News, {s['points']} points): "
-                  f"'{s['title']}'")
-    if not anchor and not facts:
+        return (f"Real recent story being discussed (Hacker News): '{s['title']}'",
+                s["id"])
+    return "", None
+
+
+def do_post(state, dry=False):
+    token = openrouter_token()
+    if not token:
+        log("openrouter token not configured — skip")
+        return False
+    used = set(state.get("used_story_ids", []))
+    stories = [s for s in hn_stories() if s["id"] not in used]
+    facts = census_facts()
+    anchor, anchor_id = build_anchor(state, stories, facts)
+    if not anchor:
         log("no anchor material — skip")
-        return
+        return False
 
-    user = (facts + ("\n\n" if facts and anchor else "") + anchor +
-            "\n\nWrite ONE tweet: your take on what this says about where "
-            "machine payments / the agentic economy is heading. Ground every "
-            "claim in the material above; opinions are welcome, invented "
-            "facts are not.")
-
+    user = (anchor + "\n\nWrite ONE tweet: your take on what this says about "
+            "where machine payments / the agentic economy is heading. Ground "
+            "every claim in the material above; opinions are welcome, "
+            "invented facts are not.")
     model = pick_model(token)
     if not model:
-        log("no free model available on OpenRouter — skip")
-        return
+        log("no free model available — skip (policy: never use paid models)")
+        return False
     text = llm_tweet(token, model, SYSTEM, user)
     if not text or len(text) > 280:
         log(f"llm output unusable (len={len(text)}) — skip")
-        return
-    log(f"model={model} anchor={anchor[:60]!r} -> {text[:100]!r}")
-
+        return False
+    log(f"model={model} -> {text[:110]!r}")
     if dry:
         print("DRY-RUN tweet:", text)
-        return
+        return True
 
     from x_post import post_tweet, load_creds, record_post  # noqa: E402
     try:
@@ -229,12 +254,62 @@ def main():
         log(f"posted comment {tid}")
     except Exception as exc:  # noqa: BLE001
         log(f"post fail: {str(exc)[:140]}")
-        return
-    if stories:
+        return False
+    if anchor_id:
         state.setdefault("used_story_ids", [])
-        state["used_story_ids"] = (state["used_story_ids"] + [stories[0]["id"]])[-200:]
-        state["last_model"] = model
+        state["used_story_ids"] = (state["used_story_ids"] + [anchor_id])[-200:]
+    state["last_model"] = model
+    return True
+
+
+def main():
+    auto = "--auto" in sys.argv
+    dry = "--dry-run" in sys.argv
+    state = {}
+    try:
+        state = json.load(open(STATE))
+    except Exception:  # noqa: BLE001
+        pass
+
+    if not auto:
+        ok = do_post(state, dry=dry)
+        if ok and not dry:
+            state["last_post_epoch"] = time.time()
+            sch = state.get("schedule") or {}
+            if sch.get("date") == datetime.now(timezone.utc).strftime("%Y-%m-%d"):
+                sch["done"] = sch.get("done", 0) + 1
         json.dump(state, open(STATE, "w"))
+        return
+
+    # ---- wake mode: check today's random schedule ----
+    sch = ensure_schedule(state)
+    times = sch.get("times", [])
+    done = sch.get("done", 0)
+    if done >= len(times):
+        sys.exit(0)  # daily quota reached — silent, no log spam
+    now = datetime.now(timezone.utc)
+    now_min = now.hour * 60 + now.minute
+    h, m = map(int, times[done].split(":"))
+    due = h * 60 + m
+    if now_min < due:
+        sys.exit(0)
+    if now_min - due > 40:
+        # slot stale (cron gap) — drop it, humans don't post hours late
+        log(f"slot {times[done]} dropped (woke {now_min - due} min late)")
+        sch["done"] += 1
+        json.dump(state, open(STATE, "w"))
+        sys.exit(0)
+    last = state.get("last_post_epoch") or 0
+    if time.time() - last < MIN_BURST_GAP_S:
+        log("anti-burst gap — slot skipped")
+        sch["done"] += 1
+        json.dump(state, open(STATE, "w"))
+        sys.exit(0)
+
+    if do_post(state, dry=dry):
+        sch["done"] = done + 1
+        state["last_post_epoch"] = time.time()
+    json.dump(state, open(STATE, "w"))
 
 
 if __name__ == "__main__":
