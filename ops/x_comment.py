@@ -44,11 +44,13 @@ LOG = "/var/lib/paycensus/x.log"
 PLACEHOLDER = "PASTE-YOUR-OPENROUTER-TOKEN-HERE"
 
 PREFERRED_MODELS = [
-    "google/gemini-2.0-flash-exp:free",
-    "meta-llama/llama-3.3-70b-instruct:free",
+    # spread across upstream providers — free pool 429s are per-provider
     "deepseek/deepseek-chat-v3-0324:free",
+    "meta-llama/llama-3.3-70b-instruct:free",
     "qwen/qwen-2.5-72b-instruct:free",
     "mistralai/mistral-small-3.1-24b-instruct:free",
+    "google/gemini-2.0-flash-exp:free",
+    "google/gemma-4-26b-a4b-it:free",
 ]
 HN_QUERIES = ["AI agents", "stablecoin", "crypto payments", "x402",
               "agentic AI", "machine payments", "microtransactions"]
@@ -62,12 +64,11 @@ def log(msg):
     ts = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
     line = f"{ts} [comment] {msg}"
     print(line, flush=True)
-    if sys.stdout.isatty():  # manual run: cron path logs via redirection
-        try:
-            with open(LOG, "a") as f:
-                f.write(line + "\n")
-        except OSError:
-            pass
+    try:
+        with open(LOG, "a") as f:
+            f.write(line + "\n")
+    except OSError:
+        pass
 
 
 def http_json(url, timeout=15):
@@ -373,7 +374,6 @@ def main():
 
     # ---- wake mode: check today's random schedule ----
     sch = ensure_schedule(state)
-    json.dump(state, open(STATE, "w"))  # persist the draw immediately
     times = sch.get("times", [])
     done = sch.get("done", 0)
     if done >= len(times):
