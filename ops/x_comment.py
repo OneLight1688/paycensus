@@ -126,6 +126,10 @@ def llm_tweet(token, model, system, user):
                 log(f"llm error ({model}): {str(d['error'])[:140]}")
                 return ""
             txt = (d.get("choices") or [{}])[0].get("message", {}).get("content", "")
+            if not (txt or "").strip():
+                ch = (d.get("choices") or [{}])[0]
+                log(f"llm empty content ({model}): finish={ch.get('finish_reason')} "
+                    f"usage={json.dumps(d.get('usage') or {})[:120]}")
             return (txt or "").strip().strip('"')
         except urllib.error.HTTPError as exc:
             if exc.code == 429 and attempt == 0:
