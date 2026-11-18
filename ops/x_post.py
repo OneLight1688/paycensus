@@ -215,7 +215,10 @@ def post_tweet(text, creds, media_path=None):
         access_token=creds["access_token"],
         access_token_secret=creds["access_secret"],
     )
-    resp = client.create_tweet(text=text[:280], media_ids=media_ids)
+    kwargs = {"text": text[:280]}
+    if media_ids:  # X v2 API rejects empty media_ids arrays
+        kwargs["media_ids"] = media_ids
+    resp = client.create_tweet(**kwargs)
     return {"data": {"id": str(resp.data.get("id", "?"))}}
 
 

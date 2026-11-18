@@ -62,11 +62,12 @@ def log(msg):
     ts = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
     line = f"{ts} [comment] {msg}"
     print(line, flush=True)
-    try:
-        with open(LOG, "a") as f:
-            f.write(line + "\n")
-    except OSError:
-        pass
+    if sys.stdout.isatty():  # manual run: cron path logs via redirection
+        try:
+            with open(LOG, "a") as f:
+                f.write(line + "\n")
+        except OSError:
+            pass
 
 
 def http_json(url, timeout=15):
@@ -372,6 +373,7 @@ def main():
 
     # ---- wake mode: check today's random schedule ----
     sch = ensure_schedule(state)
+    json.dump(state, open(STATE, "w"))  # persist the draw immediately
     times = sch.get("times", [])
     done = sch.get("done", 0)
     if done >= len(times):
