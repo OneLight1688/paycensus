@@ -61,13 +61,15 @@ def creds():
 
 
 def decode_hdr(v):
+    """Header fields can arrive as str, Header objects or None — converge to str."""
     try:
-        parts = email.header.decode_header(v or "")
+        v = str(v) if v else ""
+        parts = email.header.decode_header(v)
         return "".join(
-            p.decode(cs or "utf-8", "replace") if isinstance(p, bytes) else p
+            p.decode(cs or "utf-8", "replace") if isinstance(p, bytes) else str(p)
             for p, cs in parts)
     except Exception:  # noqa: BLE001
-        return v or ""
+        return str(v) if v else ""
 
 
 def body_text(msg):
