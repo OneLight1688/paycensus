@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<title>PayCensus Trust — your account</title>
+<meta name="robots" content="noindex,nofollow">
+<style>
+body{font-family:system-ui;max-width:880px;margin:24px auto;padding:0 16px;background:#12141a;color:#e8e8e8}
+a{color:#f6821f;text-decoration:none}a:hover{text-decoration:underline}
+h1{font-size:22px}h2{font-size:16px;border-bottom:1px solid #333;padding-bottom:4px;margin-top:28px}
+.muted{color:#9aa0aa}.mono{font-family:ui-monospace,Menlo,Consolas,monospace}
+.panel{background:#191c24;border:1px solid #2a2d36;border-radius:8px;padding:14px;margin-bottom:14px}
+table{width:100%;border-collapse:collapse;font-size:13px}td,th{padding:6px 8px;border-bottom:1px solid #2a2d36;text-align:left}
+.ok{color:#4caf50;font-weight:600}.bad{color:#ef5350;font-weight:600}
+input,button{font-size:14px;padding:8px 10px;border-radius:6px;border:1px solid #2a2d36;background:#0e1015;color:#e8e8e8}
+button{background:#f6821f;color:#12141a;font-weight:700;border:0;cursor:pointer}button:hover{filter:brightness(1.1)}
+code{background:#0e1015;border:1px solid #2a2d36;border-radius:6px;padding:8px 10px;display:block;white-space:pre-wrap;word-break:break-all;color:#cdd3dc;font-size:12px}
+.logo{height:22px;vertical-align:middle;margin-right:8px}
+.err{color:#ef5350}.okmsg{color:#4caf50}
+</style></head>
+<body>
+<p><img src="/logo.png" class="logo" alt=""> <b>PayCensus Trust</b> <span class="muted">· your account</span> <a href="/" style="float:right">← Trust home</a></p>
+
+<div id="auth" class="panel">
+<h2 style="margin-top:0">Sign in</h2>
+<p><input id="email" type="email" placeholder="email used at verification/checkout" style="width:280px">
+<input id="password" type="password" placeholder="password" style="width:180px">
+<button onclick="login()">Sign in</button></p>
+<p class="muted">First time? <a href="#" onclick="showReg()">create your account</a> — we mail a 6-digit code to the address you used at verification.</p>
+<div id="reg" style="display:none">
+<h2>Create account</h2>
+<p><input id="remail" type="email" placeholder="email" style="width:280px">
+<button onclick="sendCode()">Send code</button></p>
+<p><input id="rcode" placeholder="6-digit code" style="width:150px">
+<input id="rpass" type="password" placeholder="new password (min 8)" style="width:220px">
+<button onclick="register()">Create account</button></p>
+</div>
+<p id="authmsg" class="muted"></p>
+</div>
+
+<div id="portal" style="display:none">
+<p><b id="who"></b> <button onclick="logout()" style="float:right">Sign out</button></p>
+
+<div class="panel">
+<h2 style="margin-top:0">Verification &amp; badge</h2>
+<div id="verbox" class="muted">…</div>
+</div>
+
+<div class="panel">
+<h2 style="margin-top:0">Subscription</h2>
+<div id="subbox" class="muted">…</div>
+</div>
+
+<div class="panel">
+<h2 style="margin-top:0">Orders &amp; invoices</h2>
+<div id="invbox" class="muted">…</div>
+</div>
+
+<div class="panel">
+<h2 style="margin-top:0">API keys &amp; usage</h2>
+<div id="keybox" class="muted">…</div>
+<p><input id="klabel" placeholder="key label" style="width:200px">
+<button onclick="createKey()">Create API key</button>
+<span id="kraw" class="mono"></span></p>
+<div id="agentbox" class="muted">…</div>
+<div id="logbox" class="muted">…</div>
+</div>
+
+<div class="panel">
+<h2 style="margin-top:0">Change password</h2>
+<p><input id="oldp" type="password" placeholder="current password" style="width:220px">
+<input id="newp" type="password" placeholder="new password (min 8)" style="width:220px">
+<button onclick="chpw()">Update</button> <span id="pwmsg" class="muted"></span></p>
+</div>
+</div>
+
+<script>
+const T=()=>localStorage.getItem("pcacct")||"";
+const H=()=>({ "Authorization":"Bearer "+T(), "Content-Type":"application/json" });
+async function api(path,body){
+  const r=await fetch(path,{method:body?"POST":"GET",headers:H(),body:body?JSON.stringify(body):undefined});
+  return {code:r.status, d:await r.json().catch(()=>({}))};
+}
+function showReg(){document.getElementById("reg").style.display="";}
+async function sendCode(){
+  const em=document.getElementById("remail").value.trim().toLowerCase();
+  const r=await api("/api/account/code",{email:em});
+  document.getElementById("authmsg").textContent=r.d.note||r.d.error||"";
+}
+async function register(){
+  const r=await api("/api/account/register",{
+    email:document.getElementById("remail").value.trim().toLowerCase(),
+    code:document.getElementById("rcode").value.trim(),
+    password:document.getElementById("rpass").value});
+  if(r.d.token){localStorage.setItem("pcacct",r.d.token);location.reload();}
+  else document.getElementById("authmsg").innerHTML="<span class='err'>"+(r.d.error||"failed")+"</span>";
+}
+async function login(){
+  const r=await api("/api/account/login",{
+    email:document.getElementById("email").value.trim().toLowerCase(),
+    password:document.getElementById("password").value});
+  if(r.d.token){localStorage.setItem("pcacct",r.d.token);location.reload();}
+  else document.getElementById("authmsg").innerHTML="<span class='err'>"+(r.d.error||"failed")+"</span>";
+}
+function logout(){localStorage.removeItem("pcacct");location.reload();}
+async function chpw(){
+  const r=await api("/api/account/password",{
+    old_password:document.getElementById("oldp").value,
+    new_password:document.getElementById("newp").value});
+  document.getElementById("pwmsg").textContent=r.d.ok?"updated":(r.d.error||"failed");
+}
+let me="";
+async function createKey(){
+  const r=await api("/api/keys/create",{label:document.getElementById("klabel").value||"account key"});
+  if(r.d.key){document.getElementById("kraw").textContent="NEW KEY (shown once): "+r.d.key;load();}
+  else document.getElementById("kraw").textContent=r.d.error||"failed";
+}
+async function subscribePlus(){
+  const r=await api("/api/checkout/start",{plan:"verified_plus",email:me});
+  if(r.d.checkout_url) location.href=r.d.checkout_url;
+  else document.getElementById("authmsg").textContent=r.d.error||"checkout failed";
+}
+function esc(s){return String(s==null?"—":s);}
+async function load(){
+  const r=await api("/api/account/overview");
+  if(r.code===401){localStorage.removeItem("pcacct");return;}
+  const d=r.d;
+  me=d.email||"";
+  document.getElementById("auth").style.display="none";
+  document.getElementById("portal").style.display="";
+  document.getElementById("who").textContent=d.email||"";
+  const v=d.verification||{};
+  document.getElementById("verbox").innerHTML=
+    "<p>domain: <b>"+esc(v.domain)+"</b> · status: <b class='"+(v.status==="verified"?"ok":"")+"'>"+esc(v.status)+"</b>"+
+    " · verified since: "+esc((v.verified_at||"").slice(0,10))+" · next auto re-check: "+esc((v.next_recheck||"").slice(0,16))+"</p>"+
+    "<p class='muted'>Live badge (always accurate — embed on your site):</p><code>"+esc(v.badge_snippet)+"</code>"+
+    "<p class='muted'>Static badge assets &amp; pack: <a href='/assets.html'>download here</a> · public status: <a href='/verify.html?addr="+esc(v.addr)+"'>verify page</a></p>";
+  const s=d.subscription;
+  const ap=d.api_plan;
+  const apHtml = ap ? ("<p>API plan (Verified+): <b class='"+(ap.status==="active"?"ok":"")+"'>"+esc(ap.status)+"</b>"+
+     (ap.current_period_end?" · renews/expires: <b>"+esc(ap.current_period_end.slice(0,16))+"</b>":"")+
+     (ap.status==="active"?" · your keys run at <b>100k calls/day</b>":"")+"</p>") :
+    "<p class='muted'>no API plan yet — keys run at 10 factor calls/day free.</p>";
+  const subBtn = ((!(s||{}).status || s.status!=="active") && (!ap || ap.status!=="active")) ?
+    "<p><button onclick=\"subscribePlus()\">Subscribe to Verified+ — $49/mo (API 100k/day + monthly report)</button></p>" : "";
+  document.getElementById("subbox").innerHTML =
+    (s ? ("<p>Verified plan: <b>"+esc(s.plan)+"</b>"+(s.founding?" (founding, price locked)":"")+" · status: <b class='"+(s.status==="active"?"ok":"")+"'>"+esc(s.status)+"</b>"+
+     " · renews/expires: <b>"+esc((s.current_period_end||"").slice(0,16))+"</b></p>") :
+     "<p class='muted'>no domain subscription yet — free Listed tier (verification + status badge are free forever). <a href='/verify.html'>Verify a domain →</a></p>") +
+    apHtml + subBtn;
+  const inv=(d.invoices||[]);
+  document.getElementById("invbox").innerHTML = inv.length ?
+    ("<table><tr><th>date</th><th>amount</th><th>status</th><th>invoice</th></tr>"+
+     inv.map(i=>"<tr><td class='mono'>"+esc((i.created||"").slice(0,16))+"</td><td class='mono'>$"+(i.amount_paid_usd||0).toFixed(2)+" "+esc(i.currency||"").toUpperCase()+"</td><td>"+esc(i.status)+"</td><td><a href='"+i.hosted_invoice_url+"' target='_blank' rel='noopener'>view invoice ↗</a></td></tr>").join("")+"</table>") :
+    "<p class='muted'>no invoices yet</p>";
+  const ks=(d.api_keys||[]);
+  document.getElementById("keybox").innerHTML = ks.length ?
+    ("<table><tr><th>label</th><th>created</th><th>last used</th><th>calls today</th><th>lifetime</th></tr>"+
+     ks.map(k=>"<tr><td>"+esc(k.label||"key #"+k.id)+"</td><td class='mono'>"+esc((k.created_at||"").slice(0,10))+"</td><td class='mono'>"+esc((k.last_used||"").slice(0,16))+"</td><td>"+k.calls_today+"</td><td>"+k.calls_lifetime+"</td></tr>").join("")+"</table>") :
+    "<p class='muted'>no API keys yet — create one below (10 factor calls/day free)</p>";
+  document.getElementById("logbox").innerHTML = (d.api_log||[]).length ?
+    ("<p class='muted'>recent API calls (latest 50):</p><table><tr><th>time</th><th>endpoint</th><th>caller IP</th></tr>"+
+     d.api_log.map(l=>"<tr><td class='mono'>"+esc((l.ts||"").slice(0,19))+"</td><td class='mono'>"+esc(l.endpoint)+"</td><td class='mono'>"+esc(l.ip)+"</td></tr>").join("")+"</table>") :
+    "<p class='muted'>no API calls logged yet</p>";
+  const au=d.agent_usage||{};
+  const plus=au.plan==="verified_plus";
+  document.getElementById("agentbox").innerHTML =
+    "<p><b>Agent API</b> (rank / map / bazaar): <b>"+(au.agent_calls_today||0)+
+    "</b> agent calls today · meter "+(au.total_calls_today||0)+"/"+
+    (au.limit||1000)+" (shared with factor calls, resets 00:00 UTC) · "+
+    (plus?"<b>Verified+ active — 100k/day</b>":"free tier — 1,000/day")+"</p>"+
+    (plus?"":"<p><button onclick=\"subscribePlus()\">Raise agent quota to 100k/day — Verified+ $49/mo</button></p>");
+}
+if(T()) load();
+</script>
+</body></html>

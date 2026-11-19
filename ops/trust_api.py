@@ -1056,9 +1056,26 @@ def account_overview(conn, email):
         "SELECT plan, status, current_period_end FROM account_plans "
         "WHERE email=?", (email,)).fetchone())
     api_plan = dict(api_plan) if api_plan else None
-    if api_plan and api_plan["status"] == "active":
+    plus_active = bool(api_plan and api_plan["status"] == "active")
+    if plus_active:
         for k in keys:
             k["plan"] = "plus"
+    day = utcnow().strftime("%Y-%m-%d")
+    agent_calls = 0
+    if keys:
+        qs = ",".join("?" * len(keys))
+        agent_calls = conn.execute(
+            "SELECT COUNT(*) FROM api_log WHERE key_id IN (" + qs + ") "
+            "AND endpoint LIKE '/api/agent%' AND ts>=?",
+            tuple(k["id"] for k in keys) + (day,)).fetchone()[0]
+    agent_usage = {
+        "agent_calls_today": agent_calls,
+        "total_calls_today": sum(k.get("calls_today") or 0 for k in keys),
+        "limit": 100000 if plus_active else 1000,
+        "plan": "verified_plus" if plus_active else "free",
+        "note": "agent quota shares one meter with factor calls; "
+                "resets 00:00 UTC",
+    }
     return {
         "email": email,
         "verification": badge,
@@ -1069,10 +1086,12 @@ def account_overview(conn, email):
         "invoices": invs,
         "api_keys": keys,
         "api_log": log,
-        "api_note": ("factor calls via your keys; Verified+ active — 100k/day"
-                     if api_plan and api_plan["status"] == "active" else
-                     "factor calls via your keys; 10/day free tier — upgrade "
-                     "to Verified+ ($49/mo) for 100k/day"),
+        "agent_usage": agent_usage,
+        "api_note": ("factor + agent calls via your keys; Verified+ active — "
+                     "100k/day"
+                     if plus_active else
+                     "factor 10/day + agent 1,000/day free tier — upgrade to "
+                     "Verified+ ($49/mo) for 100k/day"),
     }
 
 
@@ -1879,7 +1898,7 @@ class Handler(BaseHTTPRequestHandler):
                         "error": "daily agent-api quota exhausted",
                         "limit": limit,
                         "upgrade": {"plan": "Verified+ $49/mo",
-                                    "url": "https://trust.paycensus.com/",
+                                    "url": "https://trust.paycensus.com/account.html",
                                     "note": "raises agent-api quota to 100k/day"},
                         "note": "Quota is shared across /api/agent/* and "
                                 "resets 00:00 UTC."})
@@ -1996,7 +2015,7 @@ class Handler(BaseHTTPRequestHandler):
                         "error": "daily free quota exhausted",
                         "limit": limit,
                         "upgrade": {"plan": "Verified+ $49/mo",
-                                    "url": "https://trust.paycensus.com/",
+                                    "url": "https://trust.paycensus.com/account.html",
                                     "note": "raises factor metering to 100k/day"},
                         "note": "Free tier: 10 factor calls/day per key. "
                                 "Upgrade at trust.paycensus.com or retry "
