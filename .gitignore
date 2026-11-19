@@ -14,3 +14,7 @@ ops/*.csv
 # generated runtime data
 site/data/
 site/s/
+
+build/
+dist/
+*.egg-info/
