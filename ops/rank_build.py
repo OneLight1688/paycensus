@@ -30,11 +30,16 @@ OUT = "/www/wwwroot/paycensus/data/rank.json"
 
 def main():
     amap = json.load(open(MAP))
-    verified = set()
+    verified = set(); proven = set()
     try:
         con = sqlite3.connect("file:" + TRUST + "?mode=ro", uri=True)
-        verified = {d.lower() for (d,) in con.execute(
-            "SELECT DISTINCT domain FROM verifications WHERE status='verified'")}
+        for d, a, p in con.execute(
+            "SELECT DISTINCT domain, addr, addr_proven FROM verifications "
+            "WHERE status='verified'"):
+            if d:
+                verified.add(d.lower())
+                if a and p:
+                    proven.add((a.lower(), d.lower()))
         con.close()
     except Exception:  # noqa: BLE001
         pass
@@ -73,6 +78,7 @@ def main():
         ticket = float(r.get("avg_ticket") or 0)
         dom = (ent.get(r["addr"]) or "").lower()
         ident = 1.0 if dom and dom in verified else (0.5 if dom else 0.0)
+        prov = bool(dom and (r["addr"].lower(), dom) in proven)
         score = (40 * min(1.0, math.log10(vol) / 6) +
                  25 * min(1.0, math.log10(buyers * 10) / 4) +
                  15 * min(1.0, math.log10(max(0.05, ticket) * 100) / 5) +
@@ -82,6 +88,7 @@ def main():
                      "volume": r.get("volume"), "buyers": r.get("buyers"),
                      "avg_ticket": r.get("avg_ticket"),
                      "verified": ident == 1.0, "identity": ident,
+                     "addr_proven": prov,
                      "bazaar_payers30": demand.get(r["addr"], 0),
                      "score": round(score, 1)})
     rows.sort(key=lambda r: -r["score"])
@@ -90,7 +97,8 @@ def main():
         "method": {"volume_score": "40% log10(volume)/6",
                    "buyers_score": "25% log10(buyers*10)/4",
                    "ticket_score": "15% log10(ticket*100)/5",
-                   "identity": "20% domain-verified=1.0, attributed=0.5, unknown=0",
+                   "identity": "20% domain-verified=1.0, attributed=0.5, unknown=0; addr_proven=payment-key signature proof",
+                   "addr_proven": "payment address signed paycensus-addr-proof=<nonce> (EIP-191 personal_sign)",
                    "classes": "real_commerce + agent_chain only; noise excluded"},
         "count": len(rows), "ranked": rows[:100],
     }

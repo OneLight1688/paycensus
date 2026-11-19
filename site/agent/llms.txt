@@ -16,7 +16,9 @@
 
 ## Trust
 - [Verify a seller](https://trust.paycensus.com/verify.html): on-chain +
-  domain-control verification, free tier forever.
+  domain-control verification, free tier forever. Optional address-ownership
+  proof: sign paycensus-addr-proof=<nonce> with the payment key during
+  verification — verified records then carry addr_proven=1.
 
 ## MCP
 - MCP endpoint: POST https://agent.paycensus.com/mcp (streamable HTTP JSON-RPC;

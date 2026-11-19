@@ -39,6 +39,15 @@ button:disabled{opacity:.5;cursor:wait}
 <p class="muted" id="expires"></p>
 <button id="check">I've added it — verify now</button>
 <div id="check-out"></div>
+<h2 style="border:none;margin-top:14px">Optional &mdash; prove address ownership</h2>
+<p class="muted">Sign <span class="mono" id="addr-msg"></span> with the payment
+address key (MetaMask or any EVM wallet, personal_sign). This upgrades your
+identity from &ldquo;domain-attributed&rdquo; to <b>address-proven</b> in the
+Agent Trust Rank.</p>
+<button id="sign">Sign with wallet</button>
+<input id="sig" placeholder="&hellip;or paste signature hex" style="width:60%">
+<button id="submit-sig">Submit signature</button>
+<div id="sig-out"></div>
 </div>
 
 <div class="panel" id="step3" style="display:none">
@@ -107,6 +116,8 @@ document.getElementById("start").onclick=async function(){
     document.getElementById("txt-val").textContent="value: "+d.txt_value;
     document.getElementById("expires").textContent="token expires: "+d.expires_at;
     document.getElementById("step2").style.display="block";
+    window._addrmsg="paycensus-addr-proof="+d.txt_value;
+    document.getElementById("addr-msg").textContent=window._addrmsg;
     out.innerHTML='<p class="ok">Verification started (id '+d.vid+'). Save your id!</p>';
     window._vid=d.vid;
   }catch(e){out.innerHTML='<p class="bad">'+e+'</p>';b.disabled=false;}
@@ -132,6 +143,27 @@ document.getElementById("check").onclick=async function(){
     }
   }catch(e){out.innerHTML='<p class="bad">'+e+'</p>';}
   b.disabled=false;b.textContent="I've added it — verify now";
+};
+async function submitSig(sigHex){
+  const out=document.getElementById("sig-out");
+  try{
+    const d=await J("/api/verify/addr-proof",{method:"POST",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({vid:window._vid,signature:sigHex})});
+    if(d.addr_proven){out.innerHTML='<p class="ok">Address ownership proven — identity factor now carries the addr_proven flag.</p>';}
+    else{out.innerHTML='<p class="bad">'+(d.error||"failed")+'</p>';}
+  }catch(e){out.innerHTML='<p class="bad">'+e+'</p>';}
+}
+document.getElementById("sign").onclick=async function(){
+  const out=document.getElementById("sig-out");
+  try{
+    if(!window.ethereum){out.innerHTML='<p class="warn">No injected wallet found — paste a signature hex instead (any EVM signer, personal_sign).</p>';return;}
+    const acc=await window.ethereum.request({method:"eth_requestAccounts"});
+    const sig=await window.ethereum.request({method:"personal_sign",params:[window._addrmsg,acc&&acc[0]]});
+    submitSig(sig);
+  }catch(e){out.innerHTML='<p class="bad">'+e+'</p>';}
+};
+document.getElementById("submit-sig").onclick=function(){
+  submitSig(document.getElementById("sig").value.trim());
 };
 </script>
 </body></html>

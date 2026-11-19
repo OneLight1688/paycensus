@@ -397,7 +397,8 @@ def db():
 def row_pub(r):
     return {"addr": r["addr"], "domain": r["domain"], "status": r["status"],
             "verified_at": r["verified_at"], "last_checked": r["last_checked"],
-            "since": (r["verified_at"] or "")[:10] or None}
+            "since": (r["verified_at"] or "")[:10] or None,
+            "addr_proven": bool(r["addr_proven"]) if "addr_proven" in r.keys() else False}
 
 
 # ---------- verification core ----------
@@ -2241,6 +2242,56 @@ class Handler(BaseHTTPRequestHandler):
                 if res is None:
                     return self.json_out(404, {"error": "unknown vid"})
                 return self.json_out(200, res)
+            if path == "/api/verify/addr-proof":
+                try:
+                    vid = int(body.get("vid") or 0)
+                except ValueError:
+                    vid = 0
+                sig = (body.get("signature") or "").strip()
+                r = conn.execute("SELECT addr, nonce, addr_proven FROM "
+                                 "verifications WHERE id=?", (vid,)).fetchone()
+                if r is None:
+                    conn.close()
+                    return self.json_out(404, {"error": "unknown vid"})
+                try:
+                    from eth_keys import keys
+                except Exception:
+                    conn.close()
+                    return self.json_out(503,
+                        {"error": "signature backend unavailable"})
+                msg = ("paycensus-addr-proof=" + r["nonce"]).encode()
+                try:
+                    s = sig[2:] if sig.startswith("0x") else sig
+                    sb = bytes.fromhex(s)
+                    if len(sb) != 65:
+                        raise ValueError("signature must be 65-byte hex")
+                    v = sb[64]
+                    if v >= 27:
+                        v -= 27
+                    rec = keys.Signature(vrs=(
+                        int(v), int.from_bytes(sb[:32], "big"),
+                        int.from_bytes(sb[32:64], "big")))
+                    prefix = (b"\x19Ethereum Personal Message:\n"
+                              + str(len(msg)).encode() + msg)
+                    addr_rec = rec.recover_public_key_from_msg(
+                        prefix).to_checksum_address()
+                except Exception as ex:
+                    conn.close()
+                    return self.json_out(400,
+                        {"error": "bad signature: " + str(ex)[:120]})
+                if addr_rec.lower() != (r["addr"] or "").lower():
+                    conn.close()
+                    return self.json_out(400, {
+                        "error": "signature does not match the payment "
+                                 "address on this verification"})
+                conn.execute("UPDATE verifications SET addr_proven=1 "
+                             "WHERE id=?", (vid,))
+                conn.commit()
+                conn.close()
+                return self.json_out(200, {
+                    "ok": True, "addr_proven": True,
+                    "note": "payment-address ownership proven; rank "
+                            "identity carries the addr_proven flag"})
             if path == "/api/report":
                 vid = int(body.get("vid") or 0)
                 msg = (body.get("message") or "")[:500]

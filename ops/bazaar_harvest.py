@@ -143,7 +143,8 @@ def main():
     new_leads = len(unseen)
     con.commit()
 
-    our_covered = len({a for r in res for a in r["payTo"] if a in sellers})
+    payto_all = {a for r in res for a in r["payTo"]}
+    our_covered = len(payto_all & sellers)
     domains = {r["domain"] for r in res if r["domain"]}
     demand = sorted([r for r in res if r["payers30"] > 0],
                     key=lambda r: -r["payers30"])[:120]
@@ -152,10 +153,24 @@ def main():
         "catalog_total": total, "unique_resources": len(res),
         "unique_domains": len(domains),
         "attributed_now": attributed,
+        "attributed_total": con.execute(
+            "SELECT COUNT(*) FROM entities WHERE source='bazaar'"
+        ).fetchone()[0],
+        "payto_total": len(payto_all),
         "our_sellers_covered": our_covered,
+        "coverage_pct": round(100.0 * our_covered / max(len(payto_all), 1), 1),
         "new_lead_addresses": new_leads,
         "top_by_demand": demand,
     }
+    try:
+        tcon = sqlite3.connect("/var/lib/paycensus/trust.db")
+        vaddr = {a.lower() for (a,) in tcon.execute(
+            "SELECT DISTINCT addr FROM verifications WHERE status='verified'")}
+        tcon.close()
+    except Exception:  # noqa: BLE001
+        vaddr = set()
+    stats["verified_payto"] = len({a for a in payto_all
+                                   if a.lower() in vaddr})
     json.dump(stats, open(STATS_OUT, "w"))
     con.close()
     log(f"attributed_now={attributed} our_sellers_covered={our_covered} "
