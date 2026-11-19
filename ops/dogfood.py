@@ -194,9 +194,16 @@ DOMAIN_SEP = keccak(DOMAIN_TYPEHASH + keccak(b"USD Coin") + keccak(b"2")
                     + CHAIN_ID.to_bytes(32, "big")
                     + bytes.fromhex(USDC_BASE[2:].rjust(64, "0")))
 
-def build_payment(pk, from_addr, to_addr, value_units, nonce=None):
+def build_payment(pk, from_addr, to_addr, value_units, nonce=None,
+                  extra=None):
     now = int(time.time())
     nonce = nonce or secrets.token_bytes(32)
+    extra = extra or {}
+    dsep = keccak(DOMAIN_TYPEHASH
+                  + keccak((extra.get("name") or "USD Coin").encode())
+                  + keccak((extra.get("version") or "2").encode())
+                  + CHAIN_ID.to_bytes(32, "big")
+                  + bytes.fromhex(USDC_BASE[2:].rjust(64, "0")))
     sh = (AUTH_TYPEHASH
           + bytes.fromhex(from_addr[2:].lower().rjust(64, "0"))
           + bytes.fromhex(to_addr[2:].lower().rjust(64, "0"))
@@ -204,7 +211,7 @@ def build_payment(pk, from_addr, to_addr, value_units, nonce=None):
           + int(now - 60).to_bytes(32, "big")
           + int(now + 600).to_bytes(32, "big")
           + nonce)
-    digest = keccak(b"\x19\x01" + DOMAIN_SEP + sh)
+    digest = keccak(b"\x19\x01" + dsep + sh)
     sig = pk.sign_msg_hash(digest)
     r, s, v = sig[:32], sig[32:64], sig[64] + 27
     payload = {
@@ -220,39 +227,115 @@ def build_payment(pk, from_addr, to_addr, value_units, nonce=None):
     return payload
 
 def cmd_pay(resource):
+    import types as _types
+    class _Dummy:
+        def __init__(self, *a, **k): pass
+    if "web3" not in sys.modules:
+        _w3 = _types.ModuleType("web3")
+        _w3.Web3 = _Dummy
+        _w3.__getattr__ = lambda name: _Dummy
+        sys.modules["web3"] = _w3
+        _mw = _types.ModuleType("web3.middleware")
+        _mw.ExtraDataToPOAMiddleware = _Dummy
+        sys.modules["web3.middleware"] = _mw
+    try:
+        from x402 import x402ClientSync
+    except ImportError:
+        sys.path.insert(0, "/tmp/x402sdk")
+        from x402 import x402ClientSync
+    from x402.mechanisms.evm.exact.client import ExactEvmScheme
+    from x402.schemas.helpers import parse_payment_required
+    from x402.http.utils import encode_payment_signature_header
     pk, addr = wallet()
     bal = usdc_balance(addr)
     print("wallet %s USDC=$%.6f" % (addr, bal))
     if bal <= 0:
-        print("wallet has no USDC — fund it first; aborting (no real spend)")
+        print("wallet has no USDC - fund it first; aborting (no real spend)")
         return
     st, hdrs, body = fetch(resource)
     if st != 402:
-        print("resource did not answer 402 (got %s) — abort" % st)
+        print("resource did not answer 402 (got %s) - abort" % st)
         return
-    accs = json.loads(body.decode("utf-8", "replace")).get("accepts") or []
-    if not accs:
-        print("no accepts in 402 — abort")
+    bodyj = json.loads(body.decode("utf-8", "replace"))
+    pr = parse_payment_required(bodyj)
+    reqs = [a for a in (pr.accepts or [])
+            if getattr(a, "scheme", "") == "exact"]
+    if not reqs:
+        print("no exact-scheme requirement - abort")
         return
-    a = accs[0]
-    value = int(a["maxAmountRequired"])
+    a = reqs[0]
+    value = int(a.amount)
     if value / 1e6 > MAX_SPEND_USD:
-        print("price $%.4f exceeds self-limit $%.2f — abort"
+        print("price $%.4f exceeds self-limit $%.2f - abort"
               % (value / 1e6, MAX_SPEND_USD))
         return
-    pay_payload = build_payment(pk, addr, a["payTo"], value)
-    hdr = {"X-PAYMENT": base64.b64encode(
-        json.dumps(pay_payload).encode()).decode()}
+    print("target:", resource)
+    print("  net:", a.network, "| payTo:", a.pay_to,
+          "| value:", value, "| asset:", getattr(a, "asset", None))
+
+    class EthSigner:
+        """ClientEvmSigner via eth_account only (no web3)."""
+        def __init__(self, key_hex):
+            from eth_account import Account
+            self.acct = Account.from_key(key_hex)
+        @property
+        def address(self):
+            return self.acct.address
+        def sign_typed_data(self, domain, types, primary_type, message):
+            from eth_account.messages import encode_typed_data
+            tdict = {k: [{"name": f.name, "type": f.type} for f in v]
+                     for k, v in dict(types).items()}
+            import dataclasses
+            dump = (dataclasses.asdict(domain)
+                    if dataclasses.is_dataclass(domain)
+                    else dict(domain))
+            def _g(d, k1, k2=None):
+                if d.get(k1) is not None:
+                    return d[k1]
+                return d.get(k2) if k2 else None
+            dom_camel = {}
+            for camel, snake in (("chainId", "chain_id"),
+                                 ("verifyingContract", "verifying_contract"),
+                                 ("name", None), ("version", None)):
+                v = _g(dump, camel, snake)
+                if v is not None:
+                    dom_camel[camel] = v
+            dom_types = [("name", "string"), ("version", "string"),
+                         ("chainId", "uint256"),
+                         ("verifyingContract", "address")]
+            eip712_domain = [{"name": n, "type": t}
+                             for n, t in dom_types if n in dom_camel]
+            enc = encode_typed_data(full_message={
+                "types": {"EIP712Domain": eip712_domain, **tdict},
+                "primaryType": primary_type,
+                "domain": dom_camel,
+                "message": message})
+            signed = self.acct.sign_message(enc)
+            return bytes(signed.signature)
+
+    client = x402ClientSync()
+    try:
+        client.register(a.network, ExactEvmScheme(
+            EthSigner(open(WALLET).read().strip().removeprefix("0x"))))
+    except AttributeError:
+        from x402.client_base import SchemeRegistration
+        client = x402ClientSync(schemes=[SchemeRegistration(
+            network=a.network,
+            client=ExactEvmScheme(EthSigner(
+                open(WALLET).read().strip().removeprefix("0x"))))])
+    payload = client.create_payment_payload(pr)
+    hdr = {"X-PAYMENT": encode_payment_signature_header(payload)}
     st2, hdrs2, body2 = fetch(resource, headers=hdr, timeout=60)
     print("paid GET -> HTTP", st2)
-    resp_hdr = hdrs2.get("X-PAYMENT-RESPONSE") or hdrs2.get("x-payment-response")
+    print("body:", body2.decode("utf-8", "replace")[:400])
+    resp_hdr = (hdrs2.get("X-PAYMENT-RESPONSE")
+                or hdrs2.get("x-payment-response"))
     if resp_hdr:
         try:
-            settle = json.loads(base64.b64decode(resp_hdr))
-            print("settlement:", json.dumps(settle)[:300])
-        except Exception:
-            print("settlement header unparseable")
-    print("body preview:", body2.decode("utf-8", "replace")[:300])
+            print("settlement:", json.dumps(json.loads(
+                base64.b64decode(resp_hdr)))[:500])
+        except Exception as e:
+            print("settlement hdr unparseable:", repr(e)[:100])
 
 if __name__ == "__main__":
     cmd = sys.argv[1] if len(sys.argv) > 1 else "wallet"
