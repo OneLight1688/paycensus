@@ -269,30 +269,49 @@ def hot_news():
     return uniq
 
 
+def pinned_story():
+    """Explicit anchor (editor-pinned, e.g. a breaking story we want to ride).
+    File: /opt/paycensus/pinned_news.json {source,title,url,angle,expire}.
+    Used with 50% probability per commentary slot until it expires."""
+    try:
+        p = json.load(open("/opt/paycensus/pinned_news.json"))
+        today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        if p.get("url") and p.get("expire", "0000") >= today:
+            return p
+    except Exception:  # noqa: BLE001
+        pass
+    return None
+
+
 def build_anchor(state, stories, facts):
     """Flavor lottery (user 2026-11-17: 蹭热点新闻模块):
     ~45% HN niche story, ~35% trending mainstream/crypto news, ~20% census
-    data observation — so the timeline reads like a real analyst's mix."""
+    data observation — so the timeline reads like a real analyst's mix.
+    Editor-pinned stories (pinned_news.json) get first shot at 50%."""
+    pin = pinned_story()
+    if pin and random.random() < 0.5:
+        text = f"Big story everyone is discussing ({pin.get('source', 'news')}): '{pin['title']}'"
+        return text, None, pin.get("url"), pin
     news = hot_news()
     roll = random.random()
     if news and roll < 0.35:
         n = random.choice(news[:8])
         anchor_text = (f"Trending right now ({n['source']}): '{n['title']}'")
-        return anchor_text, None, n["link"]
+        return anchor_text, None, n["link"], None
     if stories and roll < 0.80:
         s = random.choice(stories[:4])
         return (f"Real recent story being discussed (Hacker News, {s['points']} points): "
-                f"'{s['title']}'", s["id"], None)
+                f"'{s['title']}'", s["id"], None, None)
     if facts:
-        return facts, None, None
+        return facts, None, None, None
     if news:
         n = news[0]
-        return f"Trending right now ({n['source']}): '{n['title']}'", None, n["link"]
+        return f"Trending right now ({n['source']}): '{n['title']}'", None, n["link"], None
     if stories:
         s = stories[0]
         return (f"Real recent story being discussed (Hacker News): '{s['title']}'",
-                s["id"], None)
-    return "", None, None
+                s["id"], None, None)
+    return "", None, None, None
 
 
 def do_post(state, dry=False):
@@ -303,17 +322,20 @@ def do_post(state, dry=False):
     used = set(state.get("used_story_ids", []))
     stories = [s for s in hn_stories() if s["id"] not in used]
     facts = census_facts()
-    anchor, anchor_id, news_link = build_anchor(state, stories, facts)
+    anchor, anchor_id, news_link, pin = build_anchor(state, stories, facts)
     if not anchor:
         log("no anchor material — skip")
         return False
 
+    pin_hint = ""
+    if pin and pin.get("angle"):
+        pin_hint = (" For this story, steer the take toward: " + pin["angle"])
     user = (anchor + "\n\nWrite ONE tweet: your take on what this says about "
             "where machine payments / the agentic economy is heading. Ground "
             "every claim in the material above; opinions are welcome, "
             "invented facts are not. If this is a headline you may react as "
             "someone who just saw the news — do not pretend to have read the "
-            "full article or cite details beyond the headline.")
+            "full article or cite details beyond the headline." + pin_hint)
     models = pick_models(token)
     if not models:
         log("no free model available — skip (policy: never use paid models)")
