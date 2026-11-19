@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PayCensus — How much of the x402 economy is real?</title>
+<meta name="description" content="PayCensus classifies 23k machine-payment selling addresses into five behaviour classes — real commerce, agent chains, self-probes, dust noise, aggregator funnels — from pure on-chain behaviour.">
+<style>
+  :root{--bg:#0a0e14;--panel:#11161f;--panel2:#161d29;--line:#1f2937;--txt:#e5ecf5;--dim:#8b98ab;--ok:#5eead4;--acc:#818cf8;--warn:#e8730c}
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{background:var(--bg);color:var(--txt);font-family:'Segoe UI',system-ui,sans-serif}
+  .wrap{max-width:1100px;margin:0 auto;padding:36px 24px 64px}
+  h1{font-size:24px} h1 span{color:var(--dim);font-size:14px;font-weight:400;margin-left:10px}
+  h2{font-size:15px;margin:28px 0 10px} h2 em{color:var(--dim);font-style:normal;font-size:13px}
+  p.lead{margin-top:10px;max-width:840px;line-height:1.7;color:var(--dim);font-size:13.5px}
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:16px;overflow-x:auto}
+  table{width:100%;border-collapse:collapse;font-size:12.5px}
+  th{text-align:left;color:var(--dim);font-weight:500;padding:6px 8px;border-bottom:1px solid var(--line);font-size:11px;white-space:nowrap}
+  td{padding:6px 8px;border-bottom:1px solid #182130;font-variant-numeric:tabular-nums}
+  .mono{font-family:Consolas,monospace} .right{text-align:right}
+  .muted{color:var(--dim);font-size:12px}
+  a{color:var(--ok);text-decoration:none} a:hover{text-decoration:underline}
+  .cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;margin:16px 0}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:12px 14px}
+  .card .k{font-size:11px;color:var(--dim);text-transform:uppercase;letter-spacing:1px}
+  .card .v{font-size:17px;font-weight:700;margin-top:3px;font-variant-numeric:tabular-nums}
+  .card .s{font-size:11px;color:var(--dim);margin-top:2px}
+  .bar{height:8px;border-radius:4px;background:var(--panel2);overflow:hidden;margin-top:8px}
+  .bar i{display:block;height:100%}
+  .claim{background:var(--warn);color:#241000;border:0;border-radius:6px;padding:5px 10px;font-size:11px;font-weight:700;cursor:pointer}
+  .claim:hover{filter:brightness(1.1)}
+  .tag{display:inline-block;padding:2px 8px;border-radius:999px;font-size:10.5px;font-weight:600}
+  .tag.real_commerce{background:#0f2f2a;color:var(--ok)} .tag.agent_chain{background:#1e1b3a;color:var(--acc)}
+  .tag.self_probe{background:#2b2416;color:#d9b25a} .tag.dust_noise{background:#2b1620;color:#e77c9c}
+  .tag.aggregator{background:#152238;color:#7cb3e8} .tag.low_signal{background:#1a2030;color:var(--dim)}
+  .legend{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0}
+  footer{margin-top:40px;border-top:1px solid var(--line);padding-top:16px}
+  .cf-beacon{display:none}
+</style>
+<script defer src="https://static.cloudflareinsights.com/beacon.min.js" data-cf-beacon='{"token": "3533e37c01944a7cbeb1d684a17a3184}'></script><link rel="icon" type="image/png" href="/favicon.ico"></head>
+<body>
+<div class="wrap">
+  <img src="/logo.png" alt="PayCensus logo" style="width:34px;height:34px;border-radius:50%;vertical-align:-8px;margin-right:10px"><h1>How much of the x402 economy is real? <span>Agent Economy Signal Map</span></h1>
+  <p class="lead">Predictions say AI agents will drive <b>99.9% of blockchain transactions</b> — agents paying other agents, per task, in real time.
+  Our census counted every EIP-3009 machine settlement on Base since 2026-10-31. The raw numbers mix two very different things:
+  <b>genuine commerce</b> and <b>machine noise</b> (self-pings, dust sprays, faucet bots). This map separates them — from pure on-chain behaviour, no self-reported identity.</p>
+  <p class="muted" style="margin-top:8px">Updated <span id="gen">…</span> · method at the bottom · counts re-derivable by anyone.</p>
+
+  <h2>Taxonomy shares <em>— share of all settlement transactions</em></h2>
+  <div class="cards" id="shareCards"></div>
+  <div class="legend" id="legend"></div>
+
+  <h2>Real commerce — top sellers <em>· volume ≥ $1k, avg ticket ≥ $0.50, ≥3 buyers</em></h2>
+  <div class="panel"><table id="tReal"><thead><tr><th>Address</th><th class="right">Txs</th><th class="right">Volume</th><th class="right">Avg ticket</th><th class="right">Buyers</th><th>Identity</th></tr></thead><tbody></tbody></table></div>
+
+  <h2>Hidden commercial sellers <em>· real behaviour, no public identity yet — running one of these? Claim it.</em></h2>
+  <p class="muted" style="margin:6px 0 10px">These addresses behave exactly like real businesses (steady tickets, many buyers, real volume) but have no attributed website. If you operate one, claim it to get a verified seller page — the badge converts machine traffic into trust.</p>
+  <div class="panel"><table id="tHidden"><thead><tr><th>Address</th><th class="right">Txs</th><th class="right">Volume</th><th class="right">Avg ticket</th><th class="right">Buyers</th><th></th></tr></thead><tbody></tbody></table></div>
+
+  <h2>Agent chains <em>· addresses that both buy and sell — task delegation, not end-user trade</em></h2>
+  <div class="panel"><table id="tChain"><thead><tr><th>Address</th><th class="right">Txs</th><th class="right">Volume</th><th class="right">Avg ticket</th><th class="right">Buyers</th><th>Identity</th></tr></thead><tbody></tbody></table></div>
+
+  <h2>Machine noise, for scale <em>· what the "99.9% of transactions" headlines don't tell you</em></h2>
+  <div class="panel"><table id="tNoise"><thead><tr><th>Class</th><th class="right">Addresses</th><th class="right">Txs</th><th class="right">Volume</th><th class="right">Avg ticket</th><th>Typical behaviour</th></tr></thead><tbody></tbody></table></div>
+
+  <h2>Self-ping leaderboard <em>· an address paying itself — agent health checks</em></h2>
+  <div class="panel"><table id="tSelf"><thead><tr><th>Address</th><th class="right">Txs to itself</th><th class="right">Volume</th></tr></thead><tbody></tbody></table></div>
+
+  <h2>Method</h2>
+  <p class="lead" style="font-size:12.5px">Every selling address is classified from payment-graph behaviour only:
+  <span class="tag real_commerce">real_commerce</span> = volume ≥ $1k, avg ticket ≥ $0.50, ≥3 distinct buyers ·
+  <span class="tag agent_chain">agent_chain</span> = the address both buys and sells at non-dust tickets (task delegation) ·
+  <span class="tag self_probe">self_probe</span> = pays itself, or &gt;100 txs to ≤2 counterparties under $100 ·
+  <span class="tag dust_noise">dust_noise</span> = avg ticket &lt; $0.01, or a &lt;$0.05 spray to 500+ buyers (airdrop bots, faucets) ·
+  <span class="tag aggregator">aggregator</span> = ≤2 counterparties moving ≥ $10k, or ≥10k txs to ≤5 (gateway funnels) ·
+  <span class="tag low_signal">low_signal</span> = the rest.
+  Attribution (Identity column) comes from public web discovery; claim flow is on-chain-verified domain control.</p>
+
+  <footer>
+    <p class="muted">PayCensus — the census of the machine economy. Daily on-chain counts, seller pages, verified trust badges.
+    <a href="/">Daily census</a> · <a href="/explorer.html">Explorer</a> · <a href="/audit.html">Audit</a> · <a href="https://trust.paycensus.com/verify.html">Claim your address</a></p>
+  </footer>
+</div>
+<script>
+const fmtUSD = v => v >= 1e6 ? "$" + (v/1e6).toFixed(2) + "M" : v >= 1e3 ? "$" + (v/1e3).toFixed(1) + "k" : "$" + Number(v).toFixed(0);
+const fmtN = v => Number(v).toLocaleString("en-US");
+const short = a => a.slice(0, 8) + "…" + a.slice(-6);
+const COLORS = {real_commerce:"#5eead4", agent_chain:"#818cf8", self_probe:"#d9b25a", dust_noise:"#e77c9c", aggregator:"#7cb3e8", low_signal:"#4a566b"};
+const BEHAV = {dust_noise:"dust spray / faucet bots / pings", self_probe:"endpoint health checks", aggregator:"gateway funnels", low_signal:"mixed / low signal", agent_chain:"task delegation", real_commerce:"steady tickets, many buyers"};
+const EXPLORER = a => `href="/explorer.html?addr=${a}" target="_blank"`;
+
+function addrCell(a){ return `<td class="mono"><a ${EXPLORER(a)}>${short(a)}</a></td>`; }
+function idCell(r){
+  if (r.attributed) return `<td><a href="/s/${r.addr}" style="color:var(--ok)">attributed ✓</a></td>`;
+  return `<td><button class="claim" onclick="location.href='https://trust.paycensus.com/verify.html?addr=${r.addr}'">Claim &amp; verify</button></td>`;
+}
+function rows(tbodyId, list, build){
+  const tb = document.querySelector(tbodyId + " tbody");
+  tb.innerHTML = list.map(build).join("") || `<tr><td colspan="6" class="muted">no entries</td></tr>`;
+}
+function money(v){ return "<td class='right'>" + fmtUSD(v) + "</td>"; }
+
+fetch("/data/agent_map.json").then(r => r.json()).then(d => {
+  document.getElementById("gen").textContent = d.generated_at;
+  const totTx = d.totals.txs, totVol = d.totals.volume;
+  document.getElementById("shareCards").innerHTML = Object.entries(d.classes).map(([k, v]) => {
+    const pct = (v.txs * 100 / Math.max(1, totTx)).toFixed(1);
+    const vpct = (v.volume * 100 / Math.max(1, totVol)).toFixed(1);
+    return `<div class="card"><div class="k">${k.replace("_"," ")}</div>
+      <div class="v">${pct}%</div><div class="s">${fmtN(v.count)} addrs · ${fmtUSD(v.volume)} (${vpct}% of value)</div>
+      <div class="bar"><i style="width:${Math.min(100,pct)}%;background:${COLORS[k]}"></i></div></div>`;
+  }).join("");
+  document.getElementById("legend").innerHTML = Object.keys(COLORS).map(k =>
+    `<span class="tag ${k}">${k.replace("_"," ")}</span>`).join("");
+
+  rows("#tReal", d.top_real, r => `<tr>${addrCell(r.addr)}<td class="right">${fmtN(r.txs)}</td>${money(r.volume)}<td class="right">$${r.avg_ticket}</td><td class="right">${fmtN(r.buyers)}</td>${idCell(r)}</tr>`);
+  rows("#tHidden", d.hidden_commerce, r => `<tr>${addrCell(r.addr)}<td class="right">${fmtN(r.txs)}</td>${money(r.volume)}<td class="right">$${r.avg_ticket}</td><td class="right">${fmtN(r.buyers)}</td>${idCell(r)}</tr>`);
+  rows("#tChain", d.top_agent_chains, r => `<tr>${addrCell(r.addr)}<td class="right">${fmtN(r.txs)}</td>${money(r.volume)}<td class="right">$${r.avg_ticket}</td><td class="right">${fmtN(r.buyers)}</td>${idCell(r)}</tr>`);
+  rows("#tSelf", d.self_pings, r => `<tr>${addrCell(r.addr)}<td class="right">${fmtN(r.txs)}</td>${money(r.volume)}</tr>`);
+
+  const noiseClasses = ["dust_noise","self_probe","aggregator","low_signal","agent_chain","real_commerce"];
+  document.querySelector("#tNoise tbody").innerHTML = noiseClasses.map(k => {
+    const v = d.classes[k] || {count:0, txs:0, volume:0};
+    const avg = v.txs ? v.volume / v.txs : 0;
+    return `<tr><td><span class="tag ${k}">${k.replace("_"," ")}</span></td><td class="right">${fmtN(v.count)}</td><td class="right">${fmtN(v.txs)}</td>${money(v.volume)}<td class="right">$${avg < 0.01 ? avg.toFixed(4) : avg.toFixed(2)}</td><td class="muted">${BEHAV[k]}</td></tr>`;
+  }).join("");
+}).catch(e => {
+  document.getElementById("gen").textContent = "unavailable";
+});
+</script>
+</body>
+</html>
