@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<title>Verify your entity — PayCensus Trust</title>
+<style>
+body{font-family:system-ui;max-width:720px;margin:24px auto;padding:0 16px;background:#12141a;color:#e8e8e8}
+a{color:#f6821f;text-decoration:none}
+h1{font-size:20px}h2{font-size:15px;margin-top:22px}
+.muted{color:#9aa0aa}.mono{font-family:ui-monospace,Menlo,Consolas,monospace;background:#191c24;border:1px solid #2a2d36;border-radius:6px;padding:8px 10px;display:block;word-break:break-all;margin:6px 0;position:relative}
+input,button{font-size:14px;border-radius:6px;border:1px solid #2a2d36;background:#191c24;color:#e8e8e8;padding:8px 10px;width:100%;box-sizing:border-box}
+button{background:#f6821f;color:#12141a;font-weight:700;border:0;cursor:pointer;margin-top:8px}
+button:disabled{opacity:.5;cursor:wait}
+.ok{color:#4caf50;font-weight:600}.bad{color:#ef5350;font-weight:600}.warn{color:#ffb300}
+.panel{background:#191c24;border:1px solid #2a2d36;border-radius:8px;padding:14px;margin:12px 0}
+.logo{height:20px;vertical-align:middle;margin-right:8px}
+</style></head>
+<body>
+<p><img src="/logo.png" class="logo" alt=""> <b>PayCensus Trust</b> <span class="muted">· verify</span></p>
+<h1>Verify your entity</h1>
+<p class="muted">Fully automated. No human reviews anything. You prove control of your domain; we check it deterministically.</p>
+
+<div class="panel">
+<h2 style="margin-top:0">Step 1 — your entity</h2>
+<label class="muted">Payment address (the one receiving machine payments)</label>
+<input id="addr" placeholder="0x… or Solana address">
+<label class="muted" style="display:block;margin-top:10px">Your domain</label>
+<input id="domain" placeholder="yourproduct.com">
+<label class="muted" style="display:block;margin-top:10px">Contact email (for expiry notices only; never published)</label>
+<input id="contact" placeholder="you@yourproduct.com">
+<input id="hp" style="display:none" tabindex="-1" autocomplete="off">
+<button id="start">Start verification →</button>
+<div id="start-out"></div>
+</div>
+
+<div class="panel" id="step2" style="display:none">
+<h2 style="margin-top:0">Step 2 — add one DNS record</h2>
+<p class="muted">Create a TXT record (TTL any):</p>
+<span class="mono" id="txt-host"></span>
+<span class="mono" id="txt-val"></span>
+<p class="muted" id="expires"></p>
+<button id="check">I've added it — verify now</button>
+<div id="check-out"></div>
+</div>
+
+<div class="panel" id="step3" style="display:none">
+<h2 style="margin-top:0">Step 3 — done</h2>
+<div id="final"></div>
+<div id="upsell" style="display:none;background:#1e2530;border:1px solid #f6821f55;border-radius:8px;padding:14px;margin:12px 0">
+  <h2 style="margin-top:0;color:#f6821f">Your badge is live — make it unmissable</h2>
+  <p style="margin:6px 0">The free badge shows your Verified status. The <b>Verified seal</b> adds the
+  notarized <b>seal.svg</b> (sign a statement, embed anywhere), email alerts, and
+  <b>priority placement</b> in the directory agents actually read.</p>
+  <p style="margin:6px 0"><b><span id="up-price">$99</span>/year — founding rate, locked for life.</b>
+  <span id="up-seats" class="muted"></span></p>
+  <button id="up-btn" style="width:auto;padding:8px 18px">Upgrade to the seal →</button>
+  <p class="muted" style="margin:8px 0 0">or compare all plans at <a href="/#pricing">the pricing table</a>.
+  Verification stays free forever either way.</p>
+  <div id="up-out" class="muted" style="font-size:13px"></div>
+</div>
+<p class="muted">Re-verified automatically every 72h — you will get warning emails before any revocation. 3 consecutive failures → public revocation; a later pass reinstates automatically. Verification itself is free forever; the Verified subscription ($99/yr founding, first 100 locked for life) adds the notarized seal, email alerts and priority placement — <a href="/#pricing">pricing</a>.</p>
+<p><a href="/account.html">Manage your account, API keys &amp; billing →</a></p>
+</div>
+
+<script>
+const J=(u,o)=>fetch(u,o).then(r=>r.json());
+async function showUpsell(){
+  const el=document.getElementById("upsell");
+  try{
+    const f=await J("/api/founding");
+    document.getElementById("up-price").textContent="$"+f.founding_price_usd;
+    const taken = f.founding_total - f.remaining;
+    let seats;
+    if (f.remaining <= 0) {
+      seats = "Founding ring sold out — list price $"+f.list_price_usd+" applies.";
+    } else if (taken >= 40) {
+      seats = "Only "+f.remaining+" of "+f.founding_total+" founding seats left — then $"+f.list_price_usd+"/yr.";
+    } else if (taken > 0) {
+      seats = "Founding rate active: the first "+f.founding_total+" sellers lock $"+
+              f.founding_price_usd+"/yr for life — "+taken+" already locked in.";
+    } else {
+      seats = "Founding rate active: the first "+f.founding_total+" sellers lock $"+
+              f.founding_price_usd+"/yr for life.";
+    }
+    document.getElementById("up-seats").textContent=seats;
+    el.style.display="block";
+  }catch(e){el.style.display="block";}
+}
+document.getElementById("up-btn").onclick=async function(){
+  const b=this;b.disabled=true;
+  const out=document.getElementById("up-out");
+  try{
+    const d=await J("/api/checkout/start",{method:"POST",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({vid:window._vid,plan:"verified"})});
+    if(d.checkout_url){location.href=d.checkout_url;return;}
+    out.textContent=d.error||"Checkout unavailable right now — try the pricing page.";
+  }catch(e){out.textContent=""+e;}
+  b.disabled=false;
+};
+document.getElementById("start").onclick=async function(){
+  const b=this;b.disabled=true;
+  const out=document.getElementById("start-out");
+  try{
+    const d=await J("/api/verify/start",{method:"POST",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({addr:addr.value.trim(),domain:domain.value.trim(),
+                           contact:contact.value.trim(),hp:hp.value})});
+    if(d.error){out.innerHTML='<p class="bad">'+d.error+'</p>';b.disabled=false;return;}
+    document.getElementById("txt-host").textContent="host: "+d.txt_host;
+    document.getElementById("txt-val").textContent="value: "+d.txt_value;
+    document.getElementById("expires").textContent="token expires: "+d.expires_at;
+    document.getElementById("step2").style.display="block";
+    out.innerHTML='<p class="ok">Verification started (id '+d.vid+'). Save your id!</p>';
+    window._vid=d.vid;
+  }catch(e){out.innerHTML='<p class="bad">'+e+'</p>';b.disabled=false;}
+};
+document.getElementById("check").onclick=async function(){
+  const b=this;b.disabled=true;b.textContent="checking 3 resolvers…";
+  const out=document.getElementById("check-out");
+  try{
+    const d=await J("/api/verify/check",{method:"POST",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({vid:window._vid,hp:hp.value})});
+    out.innerHTML='<p class="muted mono">'+JSON.stringify(d.resolvers)+'</p>';
+    if(d.ok&&d.status==="verified"){
+      out.innerHTML+='<p class="ok">✅ Verified — effective '+d.since+'</p>';
+      document.getElementById("step3").style.display="block";
+      document.getElementById("final").innerHTML=
+        '<p>Badge embed (paste into your site):</p><span class="mono">&lt;script src="https://trust.paycensus.com/badge.js" data-domain="'+
+        document.getElementById("domain").value.trim()+'"&gt;&lt;/script&gt;</span>';
+      showUpsell();
+    } else if(d.status==="revoked"){
+      out.innerHTML+='<p class="bad">⛔ Revoked — '+d.fail_count+' consecutive failures. Fix DNS and start a new verification.</p>';
+    } else {
+      out.innerHTML+='<p class="warn">Not confirmed yet ('+(d.fail_count||1)+' failure). Check the record propagates, then re-check. Token stays valid until expiry.</p>';
+    }
+  }catch(e){out.innerHTML='<p class="bad">'+e+'</p>';}
+  b.disabled=false;b.textContent="I've added it — verify now";
+};
+</script>
+</body></html>

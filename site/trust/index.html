@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<title>PayCensus Trust — seller verification for machine payments</title>
+<meta name="description" content="Deterministic, fully automated seller verification for the machine-payment economy. Domain control verified, records anchored to Bitcoin.">
+<meta name="robots" content="index,follow">
+<style>
+body{font-family:system-ui;max-width:880px;margin:24px auto;padding:0 16px;background:#12141a;color:#e8e8e8}
+a{color:#f6821f;text-decoration:none}a:hover{text-decoration:underline}
+h1{font-size:22px}h2{font-size:16px;border-bottom:1px solid #333;padding-bottom:4px;margin-top:28px}
+.muted{color:#9aa0aa}.mono{font-family:ui-monospace,Menlo,Consolas,monospace}
+.panel{background:#191c24;border:1px solid #2a2d36;border-radius:8px;padding:14px;margin-bottom:14px}
+table{width:100%;border-collapse:collapse;font-size:13px}td,th{padding:6px 8px;border-bottom:1px solid #2a2d36;text-align:left}
+.ok{color:#4caf50;font-weight:600}.warn{color:#ffb300;font-weight:600}.bad{color:#ef5350;font-weight:600}
+.logo{height:22px;vertical-align:middle;margin-right:8px}
+.pill{display:inline-block;border:1px solid #f6821f;color:#f6821f;border-radius:20px;padding:2px 12px;font-size:12px;margin-right:6px}
+.price{font-size:26px;font-weight:700;color:#f6821f}
+.cite{font-size:34px;font-weight:700;color:#4caf50}
+</style></head>
+<body>
+<p><img src="/logo.png" class="logo" alt=""> <b>PayCensus Trust</b> <span class="muted">· v0.4.0 · deterministic seller verification for machine payments</span> · <a href="/account.html"><b>Sign in / API keys</b></a></p>
+
+<h1 style="margin:10px 0">The counterparty-trust layer of machine commerce</h1>
+<p class="muted">Machines buying from machines must answer four questions: <i>who are you, may you do this, how do we settle — and should I be dealing with you at all.</i>
+Identity (ERC-8004), authorization (KYA by Visa/Mastercard/Ant) and settlement (x402/MPP) have protocols. <b style="color:#e8e8e8">The fourth layer was empty.</b> Trust fills it — with facts, not opinions.</p>
+
+<div class="panel">
+<h2 style="margin-top:0">What a verification states — and only this</h2>
+<p><span class="mono">"Domain control verified 2026-11-07 · attributed &amp; active since 2026-10-31"</span></p>
+<p class="muted">Every check is deterministic and reproducible. No human ever judges a case. Revocations are public and append-only. Verification is <b>not</b> a guarantee of honesty, solvency, or legality — read the <a href="/tos.html">terms</a>.</p>
+</div>
+
+<h2>Live counter</h2>
+<div class="panel">
+<span class="cite" id="cited">…</span>
+<p class="muted" id="cite-note">verified entities · live count — the citation counter is itself the metric</p>
+</div>
+
+<h2>Pricing</h2>
+<div class="panel"><table>
+<tr><th>Tier</th><th>What you get</th><th>Price</th></tr>
+<tr><td><b>Listed</b></td><td>Attribution in the public directory (default for indexed entities)</td><td>free</td></tr>
+<tr><td><b>Verified</b></td><td>Automated domain verification + seal badge + embed code + "active since" record + instant verified/revoked email alerts <span class="warn" id="founding-left"></span></td><td><span class="price">$99</span><span class="muted">/yr founding (first 100, locked for life) · list $199/yr</span></td></tr>
+<tr><td><b>Verified+</b></td><td>+ notarized seal badge (founding ring) + contact-channel display + monthly report + priority ranking</td><td>$49/mo</td></tr>
+<tr><td><b>Trust API</b></td><td>Factor lookup at payment time: attribution, age, offer consistency, contactability</td><td>10 calls/day free · $49/mo 10k calls</td></tr>
+</table>
+<p class="muted" id="founding-note">Founding tier: $99/yr locked for life, first 100 paid subscriptions. Paid via Stripe with automatic invoicing.</p>
+</div>
+
+<h2>The notarized seal</h2>
+<div class="panel" style="text-align:center">
+<p><img id="seal" src="/api/seal.svg?addr=0xE45bAF79B15710267f8abe34E73A4D2AE19Dff19" alt="PayCensus Verified seal" style="width:220px"></p>
+<p class="muted">Live seal of the first Verified entity (paycensus.com, founding member) — generated server-side from the verification record. Subscribers embed their own; free tier embeds the <a href="https://paycensus.com/directory.html">status badge</a>.</p>
+</div>
+
+<h2>How it works — three steps, fully automated</h2>
+<div class="panel">
+<ol>
+<li><b>Claim your entity</b> — find your address in the <a href="https://paycensus.com/directory.html">directory</a>, start verification with your domain.</li>
+<li><b>Add one DNS record</b> — a one-time TXT token (expires in 48h, single-use nonce).</li>
+<li><b>Instant check</b> — we query 3 independent public resolvers; 2 of 3 must confirm. No human reviews anything. Re-verified every 72h; 3 consecutive failures → public revocation.</li>
+</ol>
+<p><a href="/verify.html" style="background:#f6821f;color:#12141a;padding:8px 18px;border-radius:6px;font-weight:700">Start verification →</a></p>
+</div>
+
+<h2>For payment processors &amp; agent builders</h2>
+<div class="panel">
+<p>One call before you settle: <span class="mono">GET /api/status?addr=0x…</span> → attribution, age, verification state, last check. Free tier: 10 calls/day. See the <a href="/api.html">API docs</a> · <a href="/account.html">Get your API key</a>. If a badge is missing from its source site, the live lookup shows <span class="bad">not verified</span> — copied badges defend themselves.</p>
+</div>
+
+<h2>Public records</h2>
+<div class="panel">
+<p>· <a href="/revocations.html">Revocation list</a> (append-only) · <a href="/tos.html">Terms</a> · <a href="/assets.html">Badge assets</a> · <a href="https://paycensus.com/audit.html">Integrity audit</a> (Bitcoin-anchored) · <a href="https://paycensus.com">Data layer</a></p>
+<p class="muted">⛓ Bitcoin-anchored · protocol-agnostic · ERC-8004 attestation export available on request</p>
+</div>
+<p class="muted" style="font-size:12px">Trust v0.4.0 · changelog: v0.1.0 first release · v0.2.0 Stripe billing + API keys · v0.3.0 data-layer factors, notarized seal, Verified+ plan · v0.4.0 warning emails before revocation, trust() in the open-source client · operator: PayCensus Labs</p>
+<script>
+fetch("/api/citations").then(r=>r.json()).then(d=>{
+  document.getElementById("cited").textContent=d.verified_entities;
+});
+fetch("/api/founding").then(r=>r.json()).then(d=>{
+  document.getElementById("founding-left").textContent =
+    "· founding slots left: " + d.remaining + "/" + d.founding_total;
+});
+</script>
+</body></html>

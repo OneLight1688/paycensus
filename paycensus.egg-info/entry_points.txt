@@ -1,0 +1,2 @@
+[console_scripts]
+paycensus-verify = paycensus.verify:main

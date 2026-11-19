@@ -2472,7 +2472,7 @@ class Handler(BaseHTTPRequestHandler):
                 return self.json_out(200, {
                     "key": raw,
                     "note": "Store this key now — it is shown once and stored "
-                            "only as a hash. Free tier: 10 factor calls/day. "
+                            "only as a hash. Free tier: 10 trust/factor calls/day + 1,000 agent calls/day. "
                             f"Key serial #{n_keys}."})
             if path == "/api/admin/config":
                 # nginx gates this path with basic auth (.htpasswd_ops)

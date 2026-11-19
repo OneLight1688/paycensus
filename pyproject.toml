@@ -25,3 +25,6 @@ paycensus-verify = "paycensus.verify:main"
 [project.urls]
 Homepage = "https://paycensus.com"
 Source = "https://github.com/OneLight1688/paycensus"
+
+[tool.setuptools]
+packages = ["paycensus"]
