@@ -8,7 +8,8 @@ import json, re, sqlite3, urllib.request
 from datetime import datetime, timezone
 
 DB = "/var/lib/paycensus/trust.db"
-OUT = "/var/lib/paycensus/badge_watch.json"
+OUTS = ["/var/lib/paycensus/badge_watch.json",
+        "/www/wwwroot/paycensus/data/badge_watch.json"]
 UA = {"User-Agent": "Mozilla/5.0 (PayCensus badge monitor; +https://paycensus.com)"}
 
 
@@ -38,7 +39,8 @@ def main():
         hist[domain] = {"addr": addr, "installed": installed, "checked_url": url,
                         "checked_at": today}
         print(f"{domain}: installed={installed} ({url})")
-    json.dump(hist, open(OUT, "w"))
+    for _o in OUTS:
+        json.dump(hist, open(_o, "w"))
 
 
 if __name__ == "__main__":
