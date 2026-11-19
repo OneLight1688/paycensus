@@ -24,3 +24,8 @@
 - MCP endpoint: POST https://agent.paycensus.com/mcp (streamable HTTP JSON-RPC;
   no key). Tools: agent_rank (min_score / cls / verified / limit), agent_map,
   bazaar_stats. Point any MCP client at this URL to query the census.
+
+## Dogfood
+- https://agent.paycensus.com/dogfood.html: our own agent buys weekly
+  from top-ranked merchants with real USDC via x402; every outcome
+  (success and failure) is published in /data/dogfood_log.json.

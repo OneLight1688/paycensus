@@ -21,6 +21,18 @@ RANK = "/www/wwwroot/paycensus/data/rank.json"
 BAZAAR = "/var/lib/paycensus/bazaar_resources.json"
 CENSUS = "/var/lib/paycensus/census.db"
 OUT = "/www/wwwroot/paycensus/data/dogfood_probe.json"
+DOGLOG = "/www/wwwroot/paycensus/data/dogfood_log.json"
+
+
+def log_purchase(rec):
+    try:
+        l = json.load(open(DOGLOG))
+    except Exception:  # noqa: BLE001
+        l = {}
+    l["updated_at"] = time.strftime("%Y-%m-%d %H:%M UTC", time.gmtime())
+    l["purchases"] = (l.get("purchases") or [])[-99:] + [rec]
+    json.dump(l, open(DOGLOG, "w"), indent=1)
+    print("purchase logged ->", DOGLOG)
 BASE_RPC = "https://mainnet.base.org"
 USDC_BASE = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913"
 CHAIN_ID = 8453
@@ -328,6 +340,11 @@ def cmd_pay(resource):
     st2, hdrs2, body2 = fetch(resource, headers=hdr, timeout=60)
     print("paid GET -> HTTP", st2)
     print("body:", body2.decode("utf-8", "replace")[:400])
+    if st2 == 200:
+        log_purchase({"ts": time.strftime("%Y-%m-%d %H:%M UTC",
+                      time.gmtime()), "resource": resource,
+                      "price_usd": round(value / 1e6, 6),
+                      "to": str(a.pay_to), "http": st2})
     resp_hdr = (hdrs2.get("X-PAYMENT-RESPONSE")
                 or hdrs2.get("x-payment-response"))
     if resp_hdr:
@@ -336,6 +353,27 @@ def cmd_pay(resource):
                 base64.b64decode(resp_hdr)))[:500])
         except Exception as e:
             print("settlement hdr unparseable:", repr(e)[:100])
+
+def cmd_cron():
+    """Weekly: free probe of top targets, then one capped real buy."""
+    cmd_probe(6)
+    best = None
+    try:
+        rep = json.load(open(OUT))
+        cands = [r for r in rep.get("results", [])
+                 if r.get("serves_402") and r.get("price_usd")
+                 and r["price_usd"] <= MAX_SPEND_USD]
+        if cands:
+            best = sorted(cands, key=lambda r: r["price_usd"])[0]
+    except Exception as e:  # noqa: BLE001
+        print("cron probe read fail:", repr(e)[:100])
+    if best:
+        print("cron buy ->", best["resource"],
+              "($%s)" % best["price_usd"])
+        cmd_pay(best["resource"])
+    else:
+        print("cron: no buyable target this week")
+
 
 if __name__ == "__main__":
     cmd = sys.argv[1] if len(sys.argv) > 1 else "wallet"
@@ -347,5 +385,7 @@ if __name__ == "__main__":
         if len(sys.argv) < 3:
             sys.exit("usage: dogfood.py pay <resource-url>")
         cmd_pay(sys.argv[2])
+    elif cmd == "cron":
+        cmd_cron()
     else:
         sys.exit(__doc__)

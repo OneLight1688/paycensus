@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<title>PayCensus dogfood — our agent buys from our own rankings</title>
+<meta name="robots" content="index,follow">
+<style>
+body{font-family:system-ui;max-width:880px;margin:24px auto;padding:0 16px;background:#12141a;color:#e8e8e8}
+a{color:#f6821f;text-decoration:none}a:hover{text-decoration:underline}
+h1{font-size:21px}h2{font-size:16px;border-bottom:1px solid #333;padding-bottom:4px;margin-top:28px}
+.muted{color:#9aa0aa}.mono{font-family:ui-monospace,Menlo,Consolas,monospace}
+.panel{background:#191c24;border:1px solid #2a2d36;border-radius:8px;padding:14px;margin-bottom:14px}
+table{width:100%;border-collapse:collapse;font-size:13px}td,th{padding:6px 8px;border-bottom:1px solid #2a2d36;text-align:left}
+.ok{color:#4caf50;font-weight:700}.bad{color:#ef5350}.right{text-align:right}
+.big{font-size:26px;font-weight:700;color:#4caf50}
+</style></head>
+<body>
+<p><b>PayCensus dogfood</b> <span class="muted">· <a href="/">agent.paycensus.com</a></span></p>
+<h1>Our agent buys from our own rankings — weekly, with real money</h1>
+<p class="muted">An automated agent of ours uses Agent Trust Rank data to pick a machine-payable endpoint, pays with USDC via x402 on Base, and records the outcome here. <b>We publish failures too</b> — a metric only means something if it can go down. Selection: triple evidence (Bazaar listing ∩ our on-chain census ∩ real_commerce class). Self-limit $0.50/purchase. Private key never leaves our server.</p>
+
+<h2>Live metric</h2>
+<div class="panel"><span class="big" id="okN">…</span> purchases OK · <span id="spent" style="font-size:16px">$…</span> spent · last purchase <span id="upd">…</span></div>
+
+<h2>Purchases <em>· real USDC spent</em></h2>
+<div class="panel"><table id="tBuy"><thead><tr><th>When (UTC)</th><th>Resource</th><th class="right">Price</th><th>PayTo</th><th>HTTP</th></tr></thead><tbody><tr><td colspan="5" class="muted">loading…</td></tr></tbody></table></div>
+
+<h2>Merchant probe <em>· free weekly check, no payment</em></h2>
+<div class="panel"><table id="tProbe"><thead><tr><th>Resource</th><th class="right">402</th><th class="right">Price</th><th class="right">payTo = census</th><th class="right">30d payers</th></tr></thead><tbody><tr><td colspan="5" class="muted">loading…</td></tr></tbody></table></div>
+
+<p class="muted">We are the publisher of the rankings; treat this page as a demonstration of our data pipeline, not an endorsement of any merchant. Related: <a href="/">Agent Trust Rank</a> · <a href="https://trust.paycensus.com">Trust verification</a> · <a href="https://paycensus.com">Data layer</a></p>
+
+<script>
+const esc=s=>String(s==null?"":s).replace(/&/g,"&amp;").replace(/</g,"&lt;");
+(async()=>{
+  try{
+    const lg=await (await fetch("/data/dogfood_log.json")).json();
+    const ps=lg.purchases||[];
+    const ok=ps.filter(p=>p.http===200).length;
+    document.getElementById("okN").textContent=ok+"/"+ps.length;
+    document.getElementById("spent").textContent="$"+ps.reduce((s,p)=>s+(p.price_usd||0),0).toFixed(3);
+    document.getElementById("upd").textContent=ps.length?ps[ps.length-1].ts:"—";
+    document.querySelector("#tBuy tbody").innerHTML=ps.length?
+      ps.slice().reverse().map(p=>'<tr><td>'+esc(p.ts)+'</td><td class="mono"><a href="'+esc(p.resource)+'">'+esc((p.resource||"").slice(0,55))+'</a></td><td class="right">$'+esc(p.price_usd)+'</td><td class="mono">'+esc((p.to||"").slice(0,12))+'…</td><td class="'+(p.http===200?"ok":"bad")+'">'+esc(p.http)+'</td></tr>').join("")
+      :'<tr><td colspan="5" class="muted">no purchases yet</td></tr>';
+  }catch(e){document.getElementById("okN").textContent="?";}
+  try{
+    const pr=await (await fetch("/data/dogfood_probe.json")).json();
+    document.querySelector("#tProbe tbody").innerHTML=(pr.results||[]).map(r=>'<tr><td class="mono">'+esc((r.resource||"").slice(0,55))+'</td><td class="right">'+(r.serves_402?'<span class="ok">402</span>':('<span class="bad">'+esc(r.http_status)+'</span>'))+'</td><td class="right">'+(r.price_usd!=null?"$"+esc(r.price_usd):"—")+'</td><td class="right">'+(r.payto_matches_our_addr===true?'<span class="ok">yes</span>':(r.payto_matches_our_addr===false?'<span class="bad">no</span>':"—"))+'</td><td class="right">'+esc(r.bazaar_payers30)+'</td></tr>').join("");
+  }catch(e){}
+})();
+</script>
+</body></html>
