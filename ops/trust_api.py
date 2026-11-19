@@ -59,6 +59,7 @@ FOUNDING_TOTAL = 100
 FOUNDING_PRICE_CENTS = 9900
 LIST_PRICE_CENTS = 19900
 FREE_CALLS_DAY = 10
+AGENT_CALLS_FREE = 1000
 STRIPE_API = "https://api.stripe.com/v1"
 STRIPE_CFG = "/opt/paycensus/.trust_stripe"
 SMTP_CRED = "/opt/paycensus/.smtp_trust"  # trust@ — transactional mail on its own identity
@@ -1859,6 +1860,119 @@ class Handler(BaseHTTPRequestHandler):
                 return self.json_out(200, {
                     "ok": True,
                     "note": "address added to outreach suppression list"})
+            if path == "/api/agent/rank":
+                conn = db()
+                krow, err = _key_auth(self, conn)
+                if err:
+                    conn.close()
+                    return self.json_out(err[0], err[1])
+                day = utcnow().strftime("%Y-%m-%d")
+                used = conn.execute(
+                    "SELECT calls FROM api_usage WHERE day=? AND key_id=?",
+                    (day, krow["id"])).fetchone()
+                used = used[0] if used else 0
+                limit = AGENT_CALLS_FREE if krow["plan"] == "free" else 100000
+                if used >= limit:
+                    conn.close()
+                    return self.json_out(429, {
+                        "error": "daily agent-api quota exhausted",
+                        "limit": limit,
+                        "upgrade": {"plan": "Verified+ $49/mo",
+                                    "url": "https://trust.paycensus.com/",
+                                    "note": "raises agent-api quota to 100k/day"},
+                        "note": "Quota is shared across /api/agent/* and "
+                                "resets 00:00 UTC."})
+                try:
+                    data = json.load(open(
+                        "/www/wwwroot/paycensus/data/rank.json"))
+                except OSError:
+                    conn.close()
+                    return self.json_out(503, {"error": "rank data not ready"})
+                ranked = data.get("ranked") or []
+                mn = q.get("min_score")
+                if mn:
+                    try:
+                        ranked = [r for r in ranked
+                                  if r.get("score", 0) >= float(mn)]
+                    except ValueError:
+                        pass
+                cls_f = (q.get("cls") or "").strip().lower()
+                if cls_f:
+                    ranked = [r for r in ranked if r.get("class") == cls_f]
+                vf = (q.get("verified") or "").strip().lower()
+                if vf in ("true", "1"):
+                    ranked = [r for r in ranked if r.get("verified")]
+                elif vf in ("false", "0"):
+                    ranked = [r for r in ranked if not r.get("verified")]
+                try:
+                    lim = min(500, max(1, int(q.get("limit") or 100)))
+                except ValueError:
+                    lim = 100
+                calls = _usage_today(conn, krow["id"], "/api/agent", ip)
+                conn.close()
+                return self.json_out(200, {
+                    "generated_at": data.get("generated_at"),
+                    "count": len(ranked[:lim]), "plan": krow["plan"],
+                    "calls_today": calls, "limit": limit,
+                    "ranked": ranked[:lim]})
+            if path == "/api/agent/map":
+                conn = db()
+                krow, err = _key_auth(self, conn)
+                if err:
+                    conn.close()
+                    return self.json_out(err[0], err[1])
+                day = utcnow().strftime("%Y-%m-%d")
+                used = conn.execute(
+                    "SELECT calls FROM api_usage WHERE day=? AND key_id=?",
+                    (day, krow["id"])).fetchone()
+                used = used[0] if used else 0
+                limit = AGENT_CALLS_FREE if krow["plan"] == "free" else 100000
+                if used >= limit:
+                    conn.close()
+                    return self.json_out(429, {
+                        "error": "daily agent-api quota exhausted",
+                        "limit": limit,
+                        "note": "Quota is shared across /api/agent/* and "
+                                "resets 00:00 UTC."})
+                calls = _usage_today(conn, krow["id"], "/api/agent", ip)
+                conn.close()
+                try:
+                    data = json.load(open(
+                        "/www/wwwroot/paycensus/data/agent_map.json"))
+                except OSError:
+                    return self.json_out(503, {"error": "map data not ready"})
+                return self.json_out(200, {"plan": krow["plan"],
+                                           "calls_today": calls,
+                                           "limit": limit, **data})
+            if path == "/api/agent/bazaar":
+                conn = db()
+                krow, err = _key_auth(self, conn)
+                if err:
+                    conn.close()
+                    return self.json_out(err[0], err[1])
+                day = utcnow().strftime("%Y-%m-%d")
+                used = conn.execute(
+                    "SELECT calls FROM api_usage WHERE day=? AND key_id=?",
+                    (day, krow["id"])).fetchone()
+                used = used[0] if used else 0
+                limit = AGENT_CALLS_FREE if krow["plan"] == "free" else 100000
+                if used >= limit:
+                    conn.close()
+                    return self.json_out(429, {
+                        "error": "daily agent-api quota exhausted",
+                        "limit": limit,
+                        "note": "Quota is shared across /api/agent/* and "
+                                "resets 00:00 UTC."})
+                calls = _usage_today(conn, krow["id"], "/api/agent", ip)
+                conn.close()
+                try:
+                    data = json.load(open(
+                        "/www/wwwroot/paycensus/data/bazaar_stats.json"))
+                except OSError:
+                    return self.json_out(503, {"error": "bazaar data not ready"})
+                return self.json_out(200, {"plan": krow["plan"],
+                                           "calls_today": calls,
+                                           "limit": limit, **data})
             if path == "/api/factors":
                 conn = db()
                 krow, err = _key_auth(self, conn)

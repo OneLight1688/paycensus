@@ -4,13 +4,13 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "paycensus"
-version = "0.6.0"
+version = "0.7.0"
 description = "Read-only client for the PayCensus machine-payment census (x402 + MPP, protocol-agnostic entity layer)"
 readme = "README.md"
 requires-python = ">=3.8"
 license = { text = "MIT" }
 authors = [{ name = "PayCensus Labs" }]
-keywords = ["x402", "mpp", "machine-payments", "census", "analytics", "ai-agents"]
+keywords = ["x402", "mpp", "machine-payments", "census", "analytics", "ai-agents", "agent-trust-rank", "agent-discovery", "bazaar"]
 classifiers = [
     "Intended Audience :: Developers",
     "License :: OSI Approved :: MIT License",

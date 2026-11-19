@@ -26,6 +26,7 @@ from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
 DEFAULT_BASE = "https://paycensus.com"
+AGENT_BASE = "https://agent.paycensus.com"
 DEFAULT_TRUST_BASE = "https://trust.paycensus.com"
 
 
@@ -47,6 +48,38 @@ class PayCensus:
         req = Request(url, headers=h)
         with urlopen(req, timeout=self.timeout) as r:
             return json.loads(r.read().decode("utf-8"))
+
+    # ---- agent network layer -------------------------------------
+    def agent_rank(self, api_key: str = None, min_score: float = None,
+                   cls: str = None, verified: bool = None, limit: int = None) -> dict:
+        """Agent Trust Rank - ranked machine-payable endpoints, scored from
+        settlement behaviour + verified identity. With an API key (pct_...)
+        you get query filters and 1,000 calls/day (free) / 100k (Verified+);
+        without one, the free hourly snapshot."""
+        if api_key:
+            params = {}
+            if min_score is not None: params['min_score'] = min_score
+            if cls: params['cls'] = cls
+            if verified is not None: params['verified'] = str(verified).lower()
+            if limit: params['limit'] = limit
+            return self._get('/api/agent/rank', base=self.trust_base,
+                             headers={'Authorization': 'Bearer ' + api_key},
+                             **params)
+        return self._get('/data/rank.json', base=AGENT_BASE)
+
+    def agent_map(self, api_key: str = None) -> dict:
+        """Behaviour taxonomy of all selling addresses (five classes)."""
+        if api_key:
+            return self._get('/api/agent/map', base=self.trust_base,
+                             headers={'Authorization': 'Bearer ' + api_key})
+        return self._get('/data/agent_map.json', base=AGENT_BASE)
+
+    def bazaar_stats(self, api_key: str = None) -> dict:
+        """x402 Bazaar coverage and 30-day demand signals."""
+        if api_key:
+            return self._get('/api/agent/bazaar', base=self.trust_base,
+                             headers={'Authorization': 'Bearer ' + api_key})
+        return self._get('/data/bazaar_stats.json', base=AGENT_BASE)
 
     # ---- aggregate / trust layer -------------------------------------------------
     def stats(self) -> dict:

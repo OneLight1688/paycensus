@@ -109,3 +109,22 @@ https://verify.opentimestamps.org. The chain has been unbroken since genesis
 ## License
 
 MIT
+## Agent network (agent.paycensus.com)
+
+```python
+from paycensus.client import PayCensus
+pc = PayCensus()
+
+# free hourly snapshot (no key)
+pc.agent_rank()
+pc.agent_map()
+pc.bazaar_stats()
+
+# keyed: filters + 1,000 calls/day free / 100k/day Verified+
+pc.agent_rank(api_key='pct_live_...', min_score=60, verified=True, limit=50)
+```
+
+Endpoints: agent.paycensus.com/data/rank.json (free), /api/agent/rank
+(keyed, Bearer pct_...). Get keys at https://trust.paycensus.com. The
+scoring method is published inside rank.json.
+
