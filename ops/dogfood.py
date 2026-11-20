@@ -328,6 +328,20 @@ def cmd_pay(resource):
             signed = self.acct.sign_message(enc)
             return bytes(signed.signature)
 
+    # Gate (ASPL v0.1): policy evaluation before any money moves
+    try:
+        import gate_policy
+        gate = gate_policy.evaluate("agent:paycensus:dogfood-01", resource,
+                                    value / 1e6, "x402", pay_to=str(a.pay_to))
+        print("GATE:", "ALLOW" if gate["allow"] else "REJECT", "|",
+              gate["reason"][:110])
+        if not gate["allow"]:
+            log_purchase({"ts": time.strftime("%Y-%m-%d %H:%M UTC",
+                          time.gmtime()), "resource": resource,
+                          "gate": "rejected", "reason": gate["reason"][:120]})
+            return
+    except Exception as ex:
+        print("gate eval skipped:", repr(ex)[:80])
     client = x402ClientSync()
     try:
         client.register(a.network, ExactEvmScheme(

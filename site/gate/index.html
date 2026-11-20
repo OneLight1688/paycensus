@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Gate — the policy layer between your agents and their wallets | PayCensus</title>
+<meta name="description" content="Gate is the enterprise policy layer for agent payments: per-agent budgets, merchant allowlists backed by Trust Rank, approval flows, and full audit chains. Software only — it never touches funds.">
+<style>
+  :root{--bg:#0a0e14;--panel:#11161f;--line:#1f2937;--txt:#e5ecf5;--dim:#8b98ab;--ok:#5eead4;--acc:#818cf8;--warn:#e8a34d}
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{background:var(--bg);color:var(--txt);font-family:'Segoe UI',system-ui,sans-serif}
+  .wrap{max-width:1100px;margin:0 auto;padding:36px 24px 64px}
+  h1{font-size:26px} h1 span{color:var(--dim);font-size:14px;font-weight:400;margin-left:10px}
+  h2{font-size:15px;margin:30px 0 10px} h2 em{color:var(--dim);font-style:normal;font-size:13px}
+  p.lead{margin-top:10px;max-width:840px;line-height:1.7;color:var(--dim);font-size:13.5px}
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:16px;overflow-x:auto}
+  table{width:100%;border-collapse:collapse;font-size:12.5px}
+  th{text-align:left;color:var(--dim);font-weight:500;padding:6px 8px;border-bottom:1px solid var(--line);font-size:11px;white-space:nowrap}
+  td{padding:6px 8px;border-bottom:1px solid #182130;font-variant-numeric:tabular-nums;vertical-align:top;line-height:1.6}
+  .mono{font-family:Consolas,monospace} .right{text-align:right}
+  .muted{color:var(--dim);font-size:12px}
+  a{color:var(--ok);text-decoration:none} a:hover{text-decoration:underline}
+  code{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:2px 8px;font-family:Consolas,monospace;font-size:12px;color:var(--warn)}
+  pre{background:#0c1118;border:1px solid var(--line);border-radius:8px;padding:12px;font-family:Consolas,monospace;font-size:12px;line-height:1.55;color:#c9d5e3;overflow-x:auto}
+  .badge{display:inline-block;padding:2px 8px;border-radius:999px;font-size:10.5px;font-weight:700;background:#0f2f2a;color:var(--ok)}
+  .cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px;margin:16px 0}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px}
+  .card .k{font-size:12px;font-weight:700;margin-bottom:6px}
+  .card .d{font-size:12px;color:var(--dim);line-height:1.6}
+  footer{margin-top:40px;border-top:1px solid var(--line);padding-top:16px}
+</style>
+<link rel="icon" type="image/png" href="https://paycensus.com/favicon.ico">
+</head>
+<body>
+<div class="wrap">
+  <img src="https://paycensus.com/logo.png" alt="PayCensus logo" style="width:34px;height:34px;border-radius:50%;vertical-align:-8px;margin-right:10px"><h1>Gate <span>the policy layer between your agents and their wallets</span></h1>
+  <p class="lead">Enterprises deploying paying agents face the same question every finance team asks:
+  <b>who is allowed to spend, how much, at which merchants, and who approves?</b>
+  Gate is a software policy layer that sits between your agents and their wallets or payment rails.
+  It evaluates every intended payment against budgets, allowlists and approval flows, signs the authorized
+  ones, and records the full intent&nbsp;→&nbsp;authorization&nbsp;→&nbsp;payment&nbsp;→&nbsp;receipt chain for audit.</p>
+  <p class="lead" style="margin-top:8px"><b>Gate never touches funds.</b> Keys belong to you — the gateway only evaluates policy
+  and co-signs with keys you control. No custodial risk, no money transmission, no license required.</p>
+  <p class="muted" style="margin-top:8px">
+  <span class="badge">OPEN SPEC</span>&nbsp;
+  <a href="/spec/">Agent Spend Policy v0.1</a> ·
+  <a href="https://agent.paycensus.com/dogfood.html">live dogfood</a> ·
+  <a href="https://agent.paycensus.com/">Trust Rank</a> ·
+  <a href="/llms.txt">llms.txt</a> ·
+  <a href="https://paycensus.com">census</a></p>
+
+  <h2>What it does <em>· four capabilities, one gateway</em></h2>
+  <div class="cards">
+    <div class="card"><div class="k">Budgets per agent</div><div class="d">Allocate monthly budgets to each agent, team or department. Spend policies: limits, time windows, per-transaction caps. Enforced before money moves.</div></div>
+    <div class="card"><div class="k">Merchant allowlists</div><div class="d">Allowlists backed by Trust Rank tiers — real settlement behaviour on stablecoin rails, static reputation heuristics elsewhere. Import a tier, or pin exact merchants.</div></div>
+    <div class="card"><div class="k">Approval flows</div><div class="d">Thresholds route payments to human approval. Everything below auto-approves; everything above waits. Approvals are signed and logged.</div></div>
+    <div class="card"><div class="k">Audit &amp; reports</div><div class="d">Full intent → authorization → payment → receipt chain per agent. Export for finance, tax and compliance. Spend reports by agent, merchant and rail.</div></div>
+  </div>
+
+  <h2>Governance tiers <em>· who can be governed</em></h2>
+  <div class="panel"><table>
+    <thead><tr><th>Tier</th><th>Agent type</th><th>How it works</th></tr></thead>
+    <tbody>
+      <tr><td><span class="badge">NATIVE</span></td><td>Agents built with the open SDK / spec</td><td>Register identity, full governance: budgets, allowlists, approvals, audit.</td></tr>
+      <tr><td><span class="badge">CONFORMANT</span></td><td>Third-party agents speaking open protocols (AP2 mandates, MCP, x402)</td><td>Pass through the gateway — it reads standard protocol messages regardless of who wrote the agent. Verification is <b>per transaction</b>, not per vendor.</td></tr>
+      <tr><td><span class="badge">UNGOVERNABLE</span></td><td>Closed agents that bypass enterprise controls</td><td>Cannot be intercepted. Spend telemetry surfaces the gap so finance sees unmapped payments instead of discovering them in an invoice.</td></tr>
+    </tbody>
+  </table></div>
+  <p class="muted" style="margin-top:8px">Vendors can self-declare conformance with the governance-readiness checklist in the spec.
+  Gate does not certify, rate or resell third-party agents.</p>
+
+  <h2>Trust data, honestly stated <em>· where our scoring is deep, and where it isn't</em></h2>
+  <div class="panel"><table>
+    <thead><tr><th>Rail</th><th>Merchant risk signal</th><th>Source</th></tr></thead>
+    <tbody>
+      <tr><td>Stablecoin rails (x402 / Base / Tempo / Solana)</td><td><b>Real settlement score</b> — volume, buyer diversity, ticket sanity, identity</td><td>PayCensus census &amp; Trust Rank (live)</td></tr>
+      <tr><td>Card / bank rails</td><td>Static heuristics + your own history</td><td>Domain reputation signals, your gateway's dispute data</td></tr>
+    </tbody>
+  </table></div>
+  <p class="muted" style="margin-top:8px">Agent payments start on open rails — that is where our data is deepest. As agents pay fiat rails,
+  your gateway's own transaction stream accumulates the risk history. Policy and audit work on <b>every</b> rail from day one.</p>
+
+  <h2>Open core <em>· the spec and reference engine are MIT-licensed</em></h2>
+  <div class="panel"><table>
+    <thead><tr><th>Open (MIT)</th><th>Commercial</th></tr></thead>
+    <tbody>
+      <tr>
+        <td>Agent Spend Policy spec<br>Reference policy engine<br>x402 / MCP adapters<br>Audit event schema</td>
+        <td>Managed cloud (hosting, updates)<br>Merchant risk API (Trust Rank usage)<br>SSO / SIEM export / BYO key integrations<br>WebAuthn · KMS · HSM · raw key — <b>no hardware sold, ever</b></td>
+      </tr>
+    </tbody>
+  </table></div>
+
+  <h2>Pricing <em>· early pilot, self-host is free forever</em></h2>
+  <div class="panel"><table>
+    <thead><tr><th></th><th class="right">Free</th><th class="right">Team</th><th class="right">Scale</th></tr></thead>
+    <tbody>
+      <tr><td>Managed cloud</td><td class="right">—</td><td class="right">$49/mo</td><td class="right">$199/mo</td></tr>
+      <tr><td>Governed agents</td><td class="right">2 (self-host)</td><td class="right">10</td><td class="right">50</td></tr>
+      <tr><td>Budgets &amp; policies</td><td class="right">✓</td><td class="right">✓</td><td class="right">✓</td></tr>
+      <tr><td>Approval flows</td><td class="right">—</td><td class="right">✓</td><td class="right">✓</td></tr>
+      <tr><td>Audit export</td><td class="right">JSON</td><td class="right">JSON / CSV</td><td class="right">+ SIEM stream</td></tr>
+      <tr><td>Trust Rank risk API</td><td class="right">1k calls/day</td><td class="right">10k calls/day</td><td class="right">100k calls/day</td></tr>
+      <tr><td>SSO / SIEM</td><td class="right">—</td><td class="right">—</td><td class="right">✓</td></tr>
+    </tbody>
+  </table></div>
+  <p class="muted" style="margin-top:8px">Rolling out with pilot partners. Self-hosted gateway is free software — managed cloud exists because
+  someone has to page you when the policy engine breaks.</p>
+
+  <h2>Proven on ourselves <em>· our own purchasing agent is governed by Gate</em></h2>
+  <p class="lead">Our weekly dogfood agent buys from machine-payable merchants with real money — and every purchase now passes
+  through a Gate policy: budget cap, Trust-Rank-derived allowlist, signed audit chain. Successes and failures are published.
+  <a href="https://agent.paycensus.com/dogfood.html">See the live audit trail →</a></p>
+
+  <footer>
+    <p class="muted">Gate is part of <a href="https://paycensus.com">PayCensus</a> — the data layer for agent payments:
+    who receives, who pays, how much, on which rails.
+    <a href="/spec/">Spec v0.1</a> · <a href="/llms.txt">llms.txt</a> · <a href="https://agent.paycensus.com/">Trust Rank</a></p>
+  </footer>
+</div>
+</body>
+</html>

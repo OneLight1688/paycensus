@@ -1,0 +1,32 @@
+{
+  "apiVersion": "aspl/v0.1",
+  "kind": "SpendPolicy",
+  "metadata": {"name": "dogfood-q1", "org": "paycensus"},
+  "subjects": [
+    {"agent": "agent:paycensus:dogfood-01", "note": "our weekly cron purchaser"}
+  ],
+  "budgets": [
+    {"scope": "agent:paycensus:dogfood-01", "currency": "USD", "monthly": 0.5, "alertAt": 0.8}
+  ],
+  "allowlists": [
+    {
+      "scope": "agent:paycensus:dogfood-01",
+      "rails": ["x402"],
+      "merchants": {
+        "pinned": [
+          {"domain": "api.onesource.io"},
+          {"domain": "onesource.io"}
+        ],
+        "trustRank": {"min": 0.5}
+      }
+    }
+  ],
+  "thresholds": {
+    "autoApproveBelow": 0.01,
+    "requireApprovalAbove": 0.05
+  },
+  "keys": {
+    "paymentSign": {"source": "raw-key", "note": "dogfood wallet; production uses kms/hsm/webauthn"}
+  },
+  "audit": {"chain": "hashlinked", "retention": "7y"}
+}

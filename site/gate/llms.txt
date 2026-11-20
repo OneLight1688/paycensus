@@ -1,0 +1,20 @@
+# Gate — agent spend governance (paycensus.com)
+
+Gate is the enterprise policy layer between AI agents and their wallets: per-agent
+budgets, merchant allowlists backed by Trust Rank, approval flows, and hash-linked
+audit chains. Software only — it never touches funds, and keys always belong to
+the enterprise.
+
+- Landing: https://gate.paycensus.com/
+- Spec: Agent Spend Policy v0.1 (open, MIT) — https://gate.paycensus.com/spec/
+- Live proof: our own purchasing agent is governed by Gate — every dogfood buy
+  passes budget + allowlist + audit policy: https://agent.paycensus.com/dogfood.html
+- Merchant risk data: https://agent.paycensus.com/ (Trust Rank — real settlement
+  behaviour on stablecoin rails; static heuristics on fiat rails)
+
+Policy evaluation is per transaction: whatever an agent claims, only payments that
+pass evaluation get co-signed with enterprise-controlled keys (WebAuthn / KMS / HSM
+/ raw key). No hardware is sold. Third-party agents speaking open protocols
+(AP2 mandates, MCP, x402) pass through the gateway; conformance is self-declared
+via the governance-readiness checklist in spec §6 — Gate does not certify, rate or
+resell agents.

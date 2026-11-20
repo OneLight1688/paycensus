@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Agent Spend Policy v0.1 — open spec | Gate</title>
+<meta name="description" content="Agent Spend Policy (ASPL) v0.1: an open format for governing what AI agents are allowed to pay — per-agent budgets, merchant allowlists, approval thresholds, key sources and audit events.">
+<style>
+  :root{--bg:#0a0e14;--panel:#11161f;--line:#1f2937;--txt:#e5ecf5;--dim:#8b98ab;--ok:#5eead4;--acc:#818cf8;--warn:#e8a34d}
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{background:var(--bg);color:var(--txt);font-family:'Segoe UI',system-ui,sans-serif}
+  .wrap{max-width:980px;margin:0 auto;padding:36px 24px 64px}
+  h1{font-size:24px} h1 span{color:var(--dim);font-size:14px;font-weight:400;margin-left:10px}
+  h2{font-size:15px;margin:28px 0 10px} h2 em{color:var(--dim);font-style:normal;font-size:13px}
+  h3{font-size:13px;margin:18px 0 6px;color:var(--ok)}
+  p.lead{margin-top:10px;max-width:840px;line-height:1.7;color:var(--dim);font-size:13.5px}
+  p,li{line-height:1.7;font-size:13px;color:#c9d5e3}
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:16px}
+  pre{background:#0c1118;border:1px solid var(--line);border-radius:8px;padding:12px;font-family:Consolas,monospace;font-size:12px;line-height:1.55;color:#c9d5e3;overflow-x:auto;margin:10px 0}
+  code{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:2px 8px;font-family:Consolas,monospace;font-size:12px;color:var(--warn)}
+  .mono{font-family:Consolas,monospace}
+  .muted{color:var(--dim);font-size:12px}
+  a{color:var(--ok);text-decoration:none} a:hover{text-decoration:underline}
+  table{width:100%;border-collapse:collapse;font-size:12.5px}
+  th{text-align:left;color:var(--dim);font-weight:500;padding:6px 8px;border-bottom:1px solid var(--line);font-size:11px}
+  td{padding:6px 8px;border-bottom:1px solid #182130;vertical-align:top;line-height:1.6}
+  .badge{display:inline-block;padding:2px 8px;border-radius:999px;font-size:10.5px;font-weight:700;background:#0f2f2a;color:var(--ok)}
+  footer{margin-top:40px;border-top:1px solid var(--line);padding-top:16px}
+</style>
+<link rel="icon" type="image/png" href="https://paycensus.com/favicon.ico">
+</head>
+<body>
+<div class="wrap">
+  <h1>Agent Spend Policy <span>ASPL v0.1 · open spec · draft</span></h1>
+  <p class="lead">ASPL is an open format describing <b>what an AI agent is allowed to pay for</b>: budgets, merchant
+  allowlists, approval thresholds, key sources and audit events. One policy file governs any agent on any rail.
+  The format is deliberately boring — it is meant to be read by policy engines, not admired.</p>
+  <p class="muted" style="margin-top:8px"><span class="badge">MIT</span> Feedback welcome. Reference engine and adapters ship under the same license.</p>
+
+  <h2>1. Design principles</h2>
+  <div class="panel"><ul style="padding-left:18px">
+    <li><b>Never touches funds.</b> ASPL evaluates intent; settlement stays on rails the enterprise already controls. Keys belong to the enterprise.</li>
+    <li><b>Agent identity is the primary key.</b> Every policy binds to a registered agent identity (signing pubkey), not to a human username.</li>
+    <li><b>Verification is per transaction.</b> The gateway is the checkout counter: whatever the agent claims, only transactions that pass evaluation get co-signed.</li>
+    <li><b>Rail-agnostic.</b> Budgets, allowlists and approvals work on any rail; only the payment adapter knows protocol details.</li>
+    <li><b>Honest risk data.</b> Merchant risk fields are tiered and labelled by data source — never presented as uniform coverage.</li>
+  </ul></div>
+
+  <h2>2. Policy file</h2>
+  <p>A policy is a single YAML document, versioned and signed. Evaluation order: identity → budget → allowlist → threshold → approval.</p>
+  <pre>apiVersion: aspl/v0.1
+kind: SpendPolicy
+metadata:
+  name: research-team-q1
+  org: acme-labs
+  validFrom: "2026-12-01T00:00:00Z"
+  validUntil: "2027-03-01T00:00:00Z"
+
+subjects:                      # who is governed — registered agent identities
+  - agent: agent:acme:scraper-01
+    pubkey: ed25519:9F86D081...
+    owner: team/research
+  - agent: agent:acme:browse-02
+    pubkey: ed25519:2C26B36B...
+    owner: team/research
+
+budgets:
+  - scope: team/research       # per-team monthly budget
+    currency: USD
+    monthly: 250.00
+    alertAt: 0.8               # notify finance at 80% burn
+  - scope: agent:acme:scraper-01
+    currency: USD
+    monthly: 80.00
+
+allowlists:
+  - scope: agent:acme:scraper-01
+    merchants:
+      trustRank: {min: 0.6}    # import merchants above Trust Rank tier
+      pinned:
+        - domain: onesource.io
+        - resource: https://api.example.com/x402/weather
+    rails: [x402, mcp]         # which rails this agent may use
+
+thresholds:
+  autoApproveBelow: 0.50       # USD per transaction
+  requireApprovalAbove: 2.00
+  approvers:
+    - role: team-lead
+    - role: finance-oncall
+
+keys:                          # co-signing key sources — BYO, never ours
+  policyChange: {source: webauthn, requireStepUp: true}
+  paymentSign:   {source: kms, keyRef: aws:kms:alias/acme-agent-gate}
+  # alternatives: hsm (PKCS#11), raw-key (dev only)
+
+audit:
+  chain: hashlinked            # each event links the previous hash
+  export:
+    - format: jsonl
+      destination: s3://acme-audit/agent-spend/
+  retention: 7y</pre>
+
+  <h2>3. Governance tiers</h2>
+  <div class="panel"><table>
+    <thead><tr><th>Tier</th><th>Meaning</th><th>Verification</th></tr></thead>
+    <tbody>
+      <tr><td><span class="badge">NATIVE</span></td><td>Speaks ASPL natively (SDK / spec)</td><td>Identity registered; full policy surface</td></tr>
+      <tr><td><span class="badge">CONFORMANT</span></td><td>Speaks open protocols: AP2 mandates, MCP, x402</td><td>Gateway reads standard messages; per-transaction evaluation. No vendor certification.</td></tr>
+      <tr><td><span class="badge">UNGOVERNABLE</span></td><td>Closed agents outside enterprise controls</td><td>Not interceptable. Reconciliation reports surface unmapped spend as a gap.</td></tr>
+    </tbody>
+  </table></div>
+  <p class="muted" style="margin-top:8px">Vendors may self-declare conformance via the checklist in §6. Gate does not certify, rank or resell third-party agents.</p>
+
+  <h2>4. Merchant risk tiers</h2>
+  <p>Risk fields carry an explicit data-source label. Engines must not present heuristic scores as settlement-derived.</p>
+  <pre>risk:
+  - source: settlement-behaviour   # PayCensus Trust Rank — real volume, buyer
+    rails: [x402, tempo, solana]   # diversity, ticket sanity, identity (live)
+  - source: static-heuristics      # domain age, TLS age, public pricing page
+    rails: [card, bank]            # computed at evaluation time
+  - source: customer-history       # your own disputes and returns, in your
+    rails: [all]                   # gateway instance — never shared</pre>
+
+  <h2>5. Audit event schema</h2>
+  <p>Every evaluated payment emits one event. Events are hash-linked; a broken chain is itself an alarm.</p>
+  <pre>{"v":"aspl/v0.1","type":"payment.evaluated","ts":"2026-11-20T04:24:54Z",
+ "agent":"agent:acme:scraper-01","intent":{"resource":"https://api.../weather",
+ "amount":"1000","currency":"USDC","rail":"x402"},
+ "decision":{"allow":true,"reason":"allowlist:trust-rank>=0.6; budget ok",
+ "coSignature":{"source":"kms","keyRef":"aws:kms:alias/acme-agent-gate"}},
+ "prevHash":"0x9af3...","hash":"0x1c8e..."}</pre>
+  <p>Event types (v0.1): <code>policy.loaded</code> · <code>payment.evaluated</code> ·
+  <code>payment.approved</code> · <code>payment.rejected</code> · <code>payment.settled</code> ·
+  <code>budget.threshold</code> · <code>chain.verified</code></p>
+
+  <h2>6. Governance-readiness checklist</h2>
+  <p class="lead" style="margin-top:0">Third-party agent vendors may self-declare conformance. Gate neither certifies nor
+  rates agents — enterprises verify claims themselves.</p>
+  <div class="panel"><ul style="padding-left:18px">
+    <li>Registers a signing identity for each agent instance (policies can bind)</li>
+    <li>Emits a payment intent <b>before</b> settlement, on a standard protocol (ASPL hook / AP2 mandate / MCP)</li>
+    <li>Honours policy denials — no charge without a co-signature</li>
+    <li>Retries and failures are reported, not hidden</li>
+  </ul></div>
+
+  <h2>7. Status</h2>
+  <p>v0.1 is a draft implemented by the Gate reference engine and exercised in production dogfood
+  (<a href="https://agent.paycensus.com/dogfood.html">live audit trail</a>). Breaking changes will be versioned,
+  never silently changed. Comments and field proposals welcome.</p>
+
+  <footer>
+    <p class="muted"><a href="/">Gate</a> · part of <a href="https://paycensus.com">PayCensus</a> ·
+    <a href="/llms.txt">llms.txt</a> · <a href="https://agent.paycensus.com/">Trust Rank</a></p>
+  </footer>
+</div>
+</body>
+</html>
