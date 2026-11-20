@@ -181,7 +181,11 @@ def main():
     yesterday = (now - timedelta(days=1)).strftime("%Y-%m-%d")
     daily = stats.get("daily", [])
     yd = [d for d in daily if d["day"] == yesterday]
-    new_sellers_24h = sum(d.get("sellers", 0) for d in yd) or None
+    # stats.json daily carries only day/txs/volume — new sellers must come
+    # from the counted sellers table (first seen on the previous UTC day)
+    new_sellers_24h = conn.execute(
+        "SELECT COUNT(*) FROM (SELECT addr, MIN(first_day) fd FROM sellers "
+        "GROUP BY addr) WHERE fd = date('now','-1 day')").fetchone()[0] or None
     base_daily_txs = sum(d.get("txs", 0) for d in yd) or None
 
     sigs = [v.get("sig") for v in state.get("probed", {}).values()
@@ -220,7 +224,7 @@ def main():
     vol_excl = total_vol - infra_vol if total_vol else 0
     churn = conn.execute(
         "SELECT COUNT(*) FROM (SELECT addr, MAX(last_day) ld FROM sellers GROUP BY addr) "
-        "WHERE ld < date('now','-7 day')").fetchone()[0]
+        "WHERE ld <= date('now','-7 day')").fetchone()[0]
     n_sellers = tot.get("sellers", 0) or 0
     tempo_est = (mpp.get("today_avg_tx_per_min") or 0) * 1440
     ousd = mpp.get("ousd_activity", {}).get("transfers_in_sample", 0)
