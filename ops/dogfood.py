@@ -329,16 +329,18 @@ def cmd_pay(resource):
             return bytes(signed.signature)
 
     # Gate (ASPL v0.1): policy evaluation before any money moves
+    gate = None
     try:
         import gate_policy
         gate = gate_policy.evaluate("agent:paycensus:dogfood-01", resource,
                                     value / 1e6, "x402", pay_to=str(a.pay_to))
-        print("GATE:", "ALLOW" if gate["allow"] else "REJECT", "|",
+        print("GATE:", gate.get("status", "?").upper(), "|",
               gate["reason"][:110])
         if not gate["allow"]:
             log_purchase({"ts": time.strftime("%Y-%m-%d %H:%M UTC",
                           time.gmtime()), "resource": resource,
-                          "gate": "rejected", "reason": gate["reason"][:120]})
+                          "gate": gate.get("status", "?"),
+                          "reason": gate["reason"][:120]})
             return
     except Exception as ex:
         print("gate eval skipped:", repr(ex)[:80])
@@ -361,7 +363,8 @@ def cmd_pay(resource):
         log_purchase({"ts": time.strftime("%Y-%m-%d %H:%M UTC",
                       time.gmtime()), "resource": resource,
                       "price_usd": round(value / 1e6, 6),
-                      "to": str(a.pay_to), "http": st2})
+                      "to": str(a.pay_to), "http": st2,
+                      "gate": (gate or {}).get("eventHash", "")[:16]})
     resp_hdr = (hdrs2.get("X-PAYMENT-RESPONSE")
                 or hdrs2.get("x-payment-response"))
     if resp_hdr:

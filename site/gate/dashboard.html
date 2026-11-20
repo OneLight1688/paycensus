@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Gate — live audit trail | PayCensus</title>
+<meta name="description" content="Live audit trail of Gate, the agent spend governance layer: every payment evaluation by our own dogfood agent, with hash-linked decisions.">
+<style>
+  :root{--bg:#0a0e14;--panel:#11161f;--line:#1f2937;--txt:#e5ecf5;--dim:#8b98ab;--ok:#5eead4;--acc:#818cf8;--warn:#e8a34d;--bad:#f87171}
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{background:var(--bg);color:var(--txt);font-family:'Segoe UI',system-ui,sans-serif}
+  .wrap{max-width:1100px;margin:0 auto;padding:36px 24px 64px}
+  h1{font-size:24px} h1 span{color:var(--dim);font-size:14px;font-weight:400;margin-left:10px}
+  h2{font-size:15px;margin:28px 0 10px} h2 em{color:var(--dim);font-style:normal;font-size:13px}
+  p.lead{margin-top:10px;max-width:840px;line-height:1.7;color:var(--dim);font-size:13.5px}
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:16px;overflow-x:auto}
+  table{width:100%;border-collapse:collapse;font-size:12px}
+  th{text-align:left;color:var(--dim);font-weight:500;padding:6px 8px;border-bottom:1px solid var(--line);font-size:11px;white-space:nowrap}
+  td{padding:6px 8px;border-bottom:1px solid #182130;font-variant-numeric:tabular-nums;vertical-align:top}
+  .mono{font-family:Consolas,monospace} .right{text-align:right}
+  .muted{color:var(--dim);font-size:12px}
+  a{color:var(--ok);text-decoration:none} a:hover{text-decoration:underline}
+  .ok{color:var(--ok);font-weight:700} .bad{color:var(--bad);font-weight:700} .warn{color:var(--warn);font-weight:700}
+  .badge{display:inline-block;padding:2px 8px;border-radius:999px;font-size:10.5px;font-weight:700;background:#0f2f2a;color:var(--ok)}
+  .cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;margin:16px 0}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:12px 14px}
+  .card .k{font-size:11px;color:var(--dim);text-transform:uppercase;letter-spacing:1px}
+  .card .v{font-size:17px;font-weight:700;margin-top:3px;font-variant-numeric:tabular-nums}
+  footer{margin-top:40px;border-top:1px solid var(--line);padding-top:16px}
+</style>
+<link rel="icon" type="image/png" href="https://paycensus.com/favicon.ico">
+</head>
+<body>
+<div class="wrap">
+  <h1>Gate audit trail <span>our own dogfood agent, governed live</span></h1>
+  <p class="lead">Every purchase our weekly dogfood agent makes passes a Gate policy (ASPL v0.1):
+  monthly budget, pinned/T-Rank merchant allowlist, auto-approve threshold. Each evaluation
+  appends one hash-linked event below — <b>publishing failures is part of the metric</b>.
+  Rejected and pending evaluations appear here exactly as they happened.</p>
+  <p class="muted" style="margin-top:8px">
+  <a href="/">Gate</a> · <a href="/spec/">ASPL spec</a> ·
+  <a href="https://agent.paycensus.com/dogfood.html">dogfood page</a> ·
+  <a href="/data/audit.jsonl">audit.jsonl</a> · <a href="/data/status.json">status.json</a></p>
+
+  <div class="cards">
+    <div class="card"><div class="k">Events</div><div class="v" id="cEvents">—</div></div>
+    <div class="card"><div class="k">Allowed</div><div class="v" id="cAllow">—</div></div>
+    <div class="card"><div class="k">Rejected</div><div class="v" id="cReject">—</div></div>
+    <div class="card"><div class="k">Pending approval</div><div class="v" id="cPending">—</div></div>
+    <div class="card"><div class="k">Audit chain</div><div class="v" id="cChain">—</div></div>
+  </div>
+
+  <h2>Evaluations <em>· newest first · refreshed every 5 minutes</em></h2>
+  <div class="panel"><table id="tAudit">
+    <thead><tr><th>Time (UTC)</th><th>Status</th><th>Agent</th><th>Resource</th><th class="right">Amount</th><th>Rail</th><th>Reason</th><th class="mono">Hash</th></tr></thead>
+    <tbody><tr><td colspan="8" class="muted">loading…</td></tr></tbody>
+  </table></div>
+
+  <footer>
+    <p class="muted">Gate is part of <a href="https://paycensus.com">PayCensus</a>.
+    The chain is verified server-side on every refresh (<code>sha256(prevHash + event)</code>); a broken chain is itself an alarm.</p>
+  </footer>
+</div>
+<script>
+function esc(s){return String(s==null?"":s).replace(/[&<>"']/g,function(c){return{"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]})}
+fetch("/data/status.json").then(r=>r.json()).then(s=>{
+  document.getElementById("cEvents").textContent=s.events;
+  var b=document.getElementById("cChain");
+  b.textContent=s.chainOk?"VERIFIED":"BROKEN";
+  b.className=s.chainOk?"ok":"bad";
+  b.title=s.chainMsg||"";
+}).catch(()=>{});
+fetch("/data/audit.jsonl").then(r=>r.text()).then(t=>{
+  var rows=t.trim().split("\n").filter(Boolean).map(JSON.parse).reverse();
+  var allow=0,rej=0,pend=0;
+  rows.forEach(function(e){var s=e.decision&&e.decision.status;if(s==="auto-approved"||s==="approved")allow++;else if(s==="pending")pend++;else rej++;});
+  document.getElementById("cAllow").textContent=allow;
+  document.getElementById("cReject").textContent=rej;
+  document.getElementById("cPending").textContent=pend;
+  var tb=document.querySelector("#tAudit tbody");
+  tb.innerHTML=rows.slice(0,80).map(function(e){
+    var d=e.decision||{},i=e.intent||{};
+    var cls=d.status==="auto-approved"||d.status==="approved"?"ok":(d.status==="pending"?"warn":"bad");
+    return "<tr><td class='mono'>"+esc(e.ts)+"</td>"
+      +"<td><span class='"+cls+"'>"+esc(d.status)+"</span></td>"
+      +"<td class='mono'>"+esc((e.agent||"").split(":").pop())+"</td>"
+      +"<td class='mono'>"+esc((i.resource||"").slice(0,48))+"</td>"
+      +"<td class='right'>$"+esc(i.amountUsd)+"</td>"
+      +"<td>"+esc(i.rail)+"</td>"
+      +"<td class='muted'>"+esc(d.reason||"").slice(0,110)+"</td>"
+      +"<td class='mono muted'>"+esc((e.hash||"").slice(0,10))+"</td></tr>";
+  }).join("");
+}).catch(function(){document.querySelector("#tAudit tbody").innerHTML="<tr><td colspan='8' class='muted'>audit data not available</td></tr>";});
+</script>
+</body>
+</html>

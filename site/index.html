@@ -3,296 +3,114 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>PayCensus — The census of the machine economy</title>
-<meta name="description" content="Real-time census of x402 + MPP / AI-agent machine payments: settlement counts, volume, buyers and sellers, indexed on-chain from Base USDC plus sampled Tempo (MPP) volume — protocol-agnostic, fully auditable.">
+<title>Agent Trust Rank — verified machine-payable endpoints | PayCensus</title>
+<meta name="description" content="Agent Trust Rank: verified ranking of machine-payable x402 endpoints, scored from real settlement behaviour (volume, buyer diversity, ticket sanity) and domain-verified identity. Free JSON API.">
 <style>
-  :root{
-    --bg:#0a0e14; --panel:#11161f; --panel2:#161d29; --line:#1f2937;
-    --txt:#e5ecf5; --dim:#8b98ab; --acc:#5eead4; --acc2:#818cf8; --warn:#fbbf24;
-  }
+  :root{--bg:#0a0e14;--panel:#11161f;--line:#1f2937;--txt:#e5ecf5;--dim:#8b98ab;--ok:#5eead4;--acc:#818cf8;--warn:#e8a34d}
   *{margin:0;padding:0;box-sizing:border-box}
-  body{background:var(--bg);color:var(--txt);font-family:'Segoe UI',system-ui,-apple-system,sans-serif;min-height:100vh}
-  .wrap{max-width:1080px;margin:0 auto;padding:40px 24px 64px}
-  header{display:flex;align-items:baseline;gap:16px;flex-wrap:wrap;margin-bottom:8px}
-  h1{font-size:28px;font-weight:700;letter-spacing:-.5px}
-  h1 .dot{color:var(--acc)}
-  .tag{color:var(--dim);font-size:14px}
-  .live{display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--acc);border:1px solid #1e3d37;background:#0d1f1b;border-radius:999px;padding:3px 10px}
-  .live::before{content:"";width:7px;height:7px;border-radius:50%;background:var(--acc);animation:pulse 2s infinite}
-  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
-  .sub{color:var(--dim);font-size:14px;margin-bottom:32px;max-width:760px;line-height:1.6}
-  .cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:14px;margin-bottom:28px}
-  .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:18px 20px}
-  .card .k{font-size:12px;color:var(--dim);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px}
-  .card .v{font-size:26px;font-weight:700;font-variant-numeric:tabular-nums}
-  .card .s{font-size:12px;color:var(--dim);margin-top:4px}
-  h2{font-size:16px;font-weight:600;margin:36px 0 14px;color:var(--txt)}
-  h2 span{color:var(--dim);font-weight:400;font-size:13px}
-  .panel{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:20px}
-  /* daily chart */
-  .chart{display:flex;align-items:flex-end;gap:4px;height:160px}
-  .bar{flex:1;background:linear-gradient(180deg,var(--acc),#0f766e);border-radius:3px 3px 0 0;min-height:2px;position:relative;opacity:.85}
-  .bar.partial{opacity:.35;background:repeating-linear-gradient(45deg,var(--acc),var(--acc) 6px,#0f766e 6px,#0f766e 12px)}
-  .bar:hover{opacity:1}
-  .bar .tip{display:none;position:absolute;bottom:100%;left:50%;transform:translateX(-50%);background:#000;color:#fff;font-size:11px;padding:4px 8px;border-radius:6px;white-space:nowrap;z-index:2}
-  .bar:hover .tip{display:block}
-  .chart-x{display:flex;justify-content:space-between;color:var(--dim);font-size:11px;margin-top:8px}
-  .empty{color:var(--dim);font-size:13px;padding:24px;text-align:center}
-  /* buckets */
-  .bk{display:flex;flex-direction:column;gap:10px}
-  .bk-row{display:grid;grid-template-columns:90px 1fr 130px;align-items:center;gap:12px;font-size:13px}
-  .bk-row .lbl{color:var(--dim)}
-  .bk-row .num{text-align:right;font-variant-numeric:tabular-nums}
-  .track{background:var(--panel2);border-radius:6px;height:14px;overflow:hidden}
-  .fill{height:100%;background:linear-gradient(90deg,var(--acc2),var(--acc));border-radius:6px}
-  /* sellers table */
-  table{width:100%;border-collapse:collapse;font-size:13px}
-  th{text-align:left;color:var(--dim);font-weight:500;padding:8px 10px;border-bottom:1px solid var(--line);font-size:12px}
-  td{padding:8px 10px;border-bottom:1px solid #182130;font-variant-numeric:tabular-nums}
-  td.mono, .mono{font-family:Consolas,Menlo,monospace}
-  tr:hover td{background:var(--panel2)}
-  .right{text-align:right}
-  .note{margin-top:40px;color:var(--dim);font-size:12px;line-height:1.7;border-top:1px solid var(--line);padding-top:16px}
-  .note b{color:var(--txt)}
-  a{color:var(--acc);text-decoration:none}
-  .loading{text-align:center;color:var(--dim);padding:60px 0;font-size:14px}
-  .mainnav{display:grid;grid-template-columns:repeat(3,1fr);gap:0 28px;background:#182135;border:1px solid #2e3a5c;border-radius:12px;padding:18px 22px;margin:12px 0 0;box-shadow:0 10px 34px rgba(0,0,0,.5)}
-  .mainnav h4{display:inline-block;margin:0 0 10px;font-size:11px;letter-spacing:1.5px;text-transform:uppercase;padding:3px 12px;border-radius:999px}
-  .h-data h4{background:rgba(94,234,212,.14);color:#5eead4}
-  .h-trust h4{background:rgba(246,130,31,.16);color:#f6a557}
-  .h-you h4{background:rgba(129,140,248,.16);color:#a5b0fb}
-  .mainnav a{display:block;color:#c9cdd6;text-decoration:none;font-size:13px;padding:3px 0}
-  .mainnav a:hover{color:var(--acc)}
-  .mainnav a.hi{color:#fff;font-weight:700}
-  .ctarow{display:flex;gap:10px;flex-wrap:wrap;margin:16px 0 4px}
-  .ctarow .p{background:var(--acc);color:#000;font-weight:700;font-size:13px;padding:8px 16px;border-radius:8px}
-  .ctarow .s{border:1px solid var(--acc);color:var(--acc);font-weight:600;font-size:13px;padding:7px 16px;border-radius:8px}
-  @media(max-width:760px){.mainnav{grid-template-columns:1fr}}
+  body{background:var(--bg);color:var(--txt);font-family:'Segoe UI',system-ui,sans-serif}
+  .wrap{max-width:1100px;margin:0 auto;padding:36px 24px 64px}
+  h1{font-size:24px} h1 span{color:var(--dim);font-size:14px;font-weight:400;margin-left:10px}
+  h2{font-size:15px;margin:28px 0 10px} h2 em{color:var(--dim);font-style:normal;font-size:13px}
+  p.lead{margin-top:10px;max-width:840px;line-height:1.7;color:var(--dim);font-size:13.5px}
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:16px;overflow-x:auto}
+  table{width:100%;border-collapse:collapse;font-size:12.5px}
+  th{text-align:left;color:var(--dim);font-weight:500;padding:6px 8px;border-bottom:1px solid var(--line);font-size:11px;white-space:nowrap}
+  td{padding:6px 8px;border-bottom:1px solid #182130;font-variant-numeric:tabular-nums}
+  .mono{font-family:Consolas,monospace} .right{text-align:right}
+  .muted{color:var(--dim);font-size:12px}
+  a{color:var(--ok);text-decoration:none} a:hover{text-decoration:underline}
+  code{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:2px 8px;font-family:Consolas,monospace;font-size:12px;color:var(--warn)}
+  .badge{display:inline-block;padding:2px 8px;border-radius:999px;font-size:10.5px;font-weight:700;background:#0f2f2a;color:var(--ok)}
+  .pill{display:inline-block;padding:3px 10px;border-radius:999px;font-size:11px;border:1px solid var(--line);color:var(--dim);margin-right:6px}
+  .cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;margin:16px 0}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:12px 14px}
+  .card .k{font-size:11px;color:var(--dim);text-transform:uppercase;letter-spacing:1px}
+  .card .v{font-size:17px;font-weight:700;margin-top:3px;font-variant-numeric:tabular-nums}
+  footer{margin-top:40px;border-top:1px solid var(--line);padding-top:16px}
 </style>
 <script defer src="https://static.cloudflareinsights.com/beacon.min.js" data-cf-beacon='{"token": "3533e37c01944a7cbeb1d684a17a3184}'></script><link rel="icon" type="image/png" href="/favicon.ico"></head>
 <body>
 <div class="wrap">
-  <header>
-    <img src="/logo.png" alt="PayCensus logo" style="width:38px;height:38px;border-radius:50%;flex:0 0 auto">
-    <h1>PayCensus<span class="dot">.</span></h1>
-    <span class="tag">The census of the machine economy</span>
-    <span class="live" style="margin-left:auto">LIVE</span>
-    <a href="/audit.html" style="font-size:12px;color:var(--acc);border:1px solid #1e3d37;background:#0d1f1b;border-radius:999px;padding:3px 10px">⛓ Bitcoin-anchored daily</a>
-    <a href="/explorer.html" style="font-size:12px;color:var(--acc2);border:1px solid #2b3350;background:#141a2e;border-radius:999px;padding:3px 10px">🔍 Explorer — who pays whom</a>
-    <a href="/directory.html" style="font-size:12px;color:#7bd88f;border:1px solid #1e3d2a;background:#0d1f1b;border-radius:999px;padding:3px 10px">📇 Entity directory</a>
-    <a href="/indicators.html" style="font-size:12px;color:#c9a7ff;border:1px solid #3a2b50;background:#141026;border-radius:999px;padding:3px 10px">📈 Leading indicators</a>
-    <a href="/agentmap.html" style="font-size:12px;color:#e8a34d;border:1px solid #4a3517;background:#241a0d;border-radius:999px;padding:3px 10px">🗺 Agent Map — how much is real?</a>
-  </header>
-  <p class="sub">Every machine-payment settlement we can observe — x402 / EIP-3009 on Base USDC, MPP on Tempo — counted, sized, and attributed.
-  When AI agents pay each other, this is where the receipts land. Indexed on-chain, updated every minute, history starts at launch day (2026-10-31).</p>
+  <img src="https://paycensus.com/logo.png" alt="PayCensus logo" style="width:34px;height:34px;border-radius:50%;vertical-align:-8px;margin-right:10px"><h1>Agent Trust Rank <span>verified machine-payable endpoints</span></h1>
+  <p class="lead">When an agent pays another agent, the first question is: <b>is this counterparty real?</b>
+  Agent Trust Rank scores machine-payable x402 endpoints from verified settlement behaviour —
+  real volume, buyer diversity, sane tickets — and domain-verified identity. Machine noise (self-pings,
+  dust sprays, faucet bots) is excluded by construction, not down-ranked.</p>
+  <p class="muted" style="margin-top:8px">Updated <span id="gen">…</span> ·
+  <a href="/data/rank.json">rank.json</a> ·
+  <a href="/data/agent_map.json">agent_map.json</a> ·
+  <a href="/data/bazaar_stats.json">bazaar_stats.json</a> · <a href="/dogfood.html">dogfood</a> · <a href="https://gate.paycensus.com/">gate</a> ·
+  <a href="/llms.txt">llms.txt</a> ·
+  <a href="https://paycensus.com/agentmap.html">full analysis</a> ·
+  <a href="https://paycensus.com">census</a></p>
 
-  <div class="ctarow">
-    <a class="p" href="https://trust.paycensus.com/verify.html">🔒 Get verified — free</a>
-    <a class="s" href="#products">Pricing — from $49/mo</a>
+  <div class="cards">
+    <div class="card"><div class="k">Endpoints ranked</div><div class="v" id="cRanked">—</div></div>
+    <div class="card"><div class="k">Identity verified</div><div class="v" id="cVerified">—</div></div>
+    <div class="card"><div class="k">x402 Bazaar demand tracked</div><div class="v" id="cDemand">—</div></div>
+    <div class="card"><div class="k">Noise classes excluded</div><div class="v">4</div></div>
   </div>
 
-  <nav class="mainnav">
-    <div class="h-data">
-      <h4>Data</h4>
-      <a href="#app">Census — settlements &amp; volume</a>
-      <a href="/indicators.html">Leading indicators · MPI / TVI</a>
-      <a href="/directory.html">Entity directory — 16,594 sellers</a>
-      <a href="/explorer.html">Explorer — who pays whom</a>
-    </div>
-    <div class="h-trust">
-      <h4>Trust</h4>
-      <a class="hi" href="https://trust.paycensus.com/verify.html">Get verified — free</a>
-      <a href="#products">Pricing — $99/yr · $49/mo</a>
-      <a href="https://trust.paycensus.com/revocations.html">Revocation list</a>
-      <a href="https://trust.paycensus.com/api.html">API for agents &amp; wallets</a>
-    </div>
-    <div class="h-you">
-      <h4>You</h4>
-      <a class="hi" href="https://trust.paycensus.com/account.html">Customer portal — sign in</a>
-      <a href="https://trust.paycensus.com/assets.html">Badge assets</a>
-      <a href="https://trust.paycensus.com/tos.html">Terms</a>
-      <a href="https://trust.paycensus.com/">Trust home</a>
-    </div>
-  </nav>
+  <h2>Agent Trust Rank <em>· score = 40% volume + 25% buyer diversity + 15% ticket sanity + 20% identity</em></h2>
+  <div class="panel"><table id="tRank"><thead><tr><th class="right">#</th><th class="right">Score</th><th>Address</th><th>Domain</th><th class="right">Volume</th><th class="right">Buyers</th><th class="right">Avg ticket</th><th>Identity</th><th class="right">30d payers</th></tr></thead><tbody></tbody></table></div>
 
-  <div id="app"><div class="loading">Loading chain data…</div></div>
-
-  <h2 style="margin-top:40px">Get verified <span>· trust infrastructure for machine-payment sellers</span></h2>
-  <p class="sub" style="margin-bottom:14px">Free forever: domain verification, public registry listing, live status widget, and all census data.
-  Paid: presentation, convenience and scale — <b>we never sell access to the truth, only to presentation and convenience.</b>
-  Every paying customer manages everything (orders, invoices, badge, API keys) in the
-  <a href="https://trust.paycensus.com/account.html" style="color:var(--acc)">customer portal</a>.</p>
-  <div class="panel" id="products" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:16px;padding:18px">
-    <div style="border:1px solid var(--line);border-radius:10px;padding:16px">
-      <div style="font-size:11px;color:#4caf50;text-transform:uppercase;letter-spacing:1px">For sellers &amp; site owners</div>
-      <div style="font-size:13px;color:var(--dim);text-transform:uppercase;letter-spacing:1px">Trust Verified</div>
-      <div style="font-size:24px;font-weight:700;margin:6px 0">$99<span style="font-size:13px;color:var(--dim)">/year</span></div>
-      <div style="font-size:12px;color:var(--dim);line-height:1.6">DNS domain-control badge · public registry listing · live status widget · founding price locked for life</div>
-      <a href="https://trust.paycensus.com/" style="display:inline-block;margin-top:10px;background:var(--acc);color:#000;font-weight:600;font-size:13px;padding:7px 14px;border-radius:8px">Get verified →</a>
-    </div>
-    <div style="border:1px solid var(--line);border-radius:10px;padding:16px">
-      <div style="font-size:11px;color:#c9a7ff;text-transform:uppercase;letter-spacing:1px">For growing sellers</div>
-      <div style="font-size:13px;color:var(--dim);text-transform:uppercase;letter-spacing:1px">Verified+</div>
-      <div style="font-size:24px;font-weight:700;margin:6px 0">$49<span style="font-size:13px;color:var(--dim)">/month</span></div>
-      <div style="font-size:12px;color:var(--dim);line-height:1.6">factors API beyond free tier · monthly machine-economy report · priority registry placement</div>
-      <a href="https://trust.paycensus.com/" style="display:inline-block;margin-top:10px;border:1px solid var(--acc);color:var(--acc);font-weight:600;font-size:13px;padding:6px 14px;border-radius:8px">Subscribe →</a>
-    </div>
-    <div style="border:1px solid var(--line);border-radius:10px;padding:16px">
-      <div style="font-size:11px;color:#c9a7ff;text-transform:uppercase;letter-spacing:1px">For agents, wallets &amp; facilitators</div>
-      <div style="font-size:13px;color:var(--dim);text-transform:uppercase;letter-spacing:1px">Trust API</div>
-      <div style="font-size:24px;font-weight:700;margin:6px 0">$49<span style="font-size:13px;color:var(--dim)">/month · 10k calls</span></div>
-      <div style="font-size:12px;color:var(--dim);line-height:1.6">deterministic seller factors for facilitators &amp; agent wallets — verify before you pay</div>
-      <a href="https://trust.paycensus.com/api.html" style="display:inline-block;margin-top:10px;border:1px solid var(--acc);color:var(--acc);font-weight:600;font-size:13px;padding:6px 14px;border-radius:8px">API docs →</a>
-    </div>
+  <h2>API <em>· free JSON + keyed high-frequency endpoints</em></h2>
+  <div class="panel">
+    <p class="muted" style="margin-bottom:8px">Free (no key, CORS open):</p>
+    <table>
+      <tr><td class="mono"><a href="/data/rank.json">/data/rank.json</a></td><td class="muted">ranked endpoints + scoring method (hourly snapshot)</td></tr>
+      <tr><td class="mono"><a href="/data/agent_map.json">/data/agent_map.json</a></td><td class="muted">full behaviour taxonomy of 23k selling addresses</td></tr>
+      <tr><td class="mono"><a href="/data/bazaar_stats.json">/data/bazaar_stats.json</a></td><td class="muted">x402 Bazaar coverage + 30d demand signals</td></tr>
+      <tr><td class="mono"><a href="/dogfood.html">/dogfood.html</a></td><td class="muted">our own agent buys weekly from ranked merchants — public outcome log</td></tr>
+      <tr><td class="mono"><a href="/llms.txt">/llms.txt</a></td><td class="muted">machine-readable index of this site</td></tr>
+      <tr><td class="mono">POST /mcp</td><td class="muted">MCP endpoint (streamable HTTP; tools: agent_rank, agent_map, bazaar_stats) — free, no key</td></tr>
+    </table>
+    <p class="muted" style="margin:12px 0 8px">Keyed (Bearer pct_…, 1,000 calls/day free · 100k/day Verified+ — filters, metering, commercial use):</p>
+    <table>
+      <tr><td class="mono">GET /api/agent/rank</td><td class="muted">params: min_score, cls, verified, limit</td></tr>
+      <tr><td class="mono">GET /api/agent/map</td><td class="muted">full taxonomy snapshot</td></tr>
+      <tr><td class="mono">GET /api/agent/bazaar</td><td class="muted">Bazaar demand signals</td></tr>
+      <tr><td class="mono">GET /api/usage</td><td class="muted">your metering status</td></tr>
+    </table>
+    <p class="muted" style="margin-top:10px">Python client: <code>pip install paycensus</code> (v0.7.0) —
+    <span class="mono">pc.agent_rank(api_key="pct_…", min_score=60)</span> · <a href="https://trust.paycensus.com/account.html" style="background:#f6821f;color:#12141a;padding:6px 16px;border-radius:6px;font-weight:700;display:inline-block">Get API key →</a>&nbsp; <a href="https://trust.paycensus.com/account.html">sign in / usage / billing</a></p>
   </div>
 
-  <div id="idxstrip"></div>
+  <h2>Method <em>· short version</em></h2>
+  <p class="lead" style="font-size:12.5px">Only endpoints classified <b>real_commerce</b> (volume ≥ $1k, avg ticket ≥ $0.50, ≥3 distinct buyers) or
+  <b>agent_chain</b> (both buys and sells at non-dust tickets) are ranked. Four noise classes — dust_noise, self_probe,
+  aggregator funnels, low_signal — are excluded by construction. Identity: <span class="badge">verified</span> = domain control proven
+  at <a href="https://trust.paycensus.com">trust.paycensus.com</a>; attributed = public web discovery, unverified. Full methodology:
+  <a href="https://paycensus.com/agentmap.html">agentmap.html</a>.</p>
 
-  <div class="note">
-    <b>Method.</b> A settlement is an <span class="mono">AuthorizationUsed</span> event emitted by the Base USDC contract
-    (<span class="mono">0x8335…2913</span>) — the authoritative mark of an EIP-3009
-    <span class="mono">transferWithAuthorization</span> / <span class="mono">receiveWithAuthorization</span> execution.
-    Value and counterparties are paired from the <span class="mono">Transfer</span> event in the same transaction.
-    <br><b>Coverage.</b> Protocol-agnostic by design — the ingest layer records the protocol,
-    the entity layer does not care. Counted: x402/EIP-3009 on Base (<span class="mono">AuthorizationUsed</span>)
-    and Solana (facilitator programs: Meridian <span class="mono">meridian_x402</span>, PayAI).
-    Sampled: MPP on Tempo (<span class="mono">tempo_mpp</span> in stats.json, hourly estimates — raw
-    chain activity, Stripe fiat rails are not observable). Direct wallet-to-wallet settlements
-    are not counted on any chain — treat totals as a floor, not a market total.
-    <br><b>Integrity.</b> History here is never rewritten — and now provably so: every day the data files are
-    hash-chained and <b>Bitcoin-anchored</b> (OpenTimestamps). Any attempt to alter a past day
-    would break every later link. <a href="/audit.html">Verify the chain →</a>
-    <br><b>Independently verifiable — the only machine-payment data feed whose daily integrity you can check
-    yourself, without trusting us:</b> install the client and run
-    <span class="mono">pip install paycensus &amp;&amp; paycensus-verify --base https://paycensus.com --ots</span>
-    — it re-computes the hash chain and validates the Bitcoin attestations from scratch. Exit code 0 = the
-    numbers you cite were not touched after the day they describe.
-    <br><b>Data:</b> <a href="data/stats.json">stats.json</a> · <a href="data/calendar.json">calendar.json</a> ·
-    <a href="data/audit.json">audit.json</a> · <a href="data/mpp.json">mpp.json</a> (MPP/Tempo monitor) ·
-    <a href="data/directory.json">directory.json</a> (entity registry) ·
-    <a href="data/indicators.json">indicators.json</a> (leading indicators) ·
-    <a href="data/indices.json">indices.json</a> (MPI / TVI daily indices) ·
-    built by <a href="https://paycensus.com">PayCensus Labs</a>
-  </div>
+  <footer>
+    <p class="muted">PayCensus — the census of the machine economy.
+    <a href="https://paycensus.com">Daily census</a> ·
+    <a href="https://paycensus.com/agentmap.html">Agent Map</a> ·
+    <a href="https://trust.paycensus.com/verify.html">Claim &amp; verify your endpoint</a> ·
+    <a href="https://x.com/PayCensusLabs">@PayCensusLabs</a></p>
+  </footer>
 </div>
-
 <script>
-const USDC = n => n.toLocaleString("en-US", {maximumFractionDigits: 2});
-function addr(a){return `<span class="mono">${a.slice(0,8)}…${a.slice(-6)}</span>`;}
-
-function el(html){const t=document.createElement("template");t.innerHTML=html.trim();return t.content.firstChild;}
-
-fetch("data/indices.json?ts="+Date.now()).then(r=>r.json()).then(d=>{
-  const m=d.mpi||{}, t=d.tvi||{};
-  if(m.value===undefined&&m.value===null) return;
-  const dod=(m.day_over_day_pct==null)?"":(m.day_over_day_pct>=0?" ▲":" ▼")+Math.abs(m.day_over_day_pct)+"% d/d";
-  document.getElementById("idxstrip").innerHTML =
-    `<div class="note" style="margin-top:14px"><b>Daily indices</b> — <b>MPI ${Number(m.value).toLocaleString("en-US",{minimumFractionDigits:2})}</b> (base ${m.base_date} = 100, ${m.last_complete_day}${dod}) · <b>TVI ${t.value_pct}%</b> trust-verified coverage (${t.verified}/${t.attributed_entities} entities) · deterministic ratios of Bitcoin-anchored data, no weights, no forecasts · <a href="/indicators.html">definitions & series →</a></div>`;
-}).catch(()=>{});
-
-async function main(){
-  let s;
-  try{
-    const r = await fetch("data/stats.json?ts="+Date.now());
-    if(!r.ok) throw new Error(r.status);
-    s = await r.json();
-  }catch(e){
-    document.getElementById("app").innerHTML = '<div class="loading">Indexer warming up — first data lands within a minute. <a href="" onclick="location.reload();return false">Retry</a></div>';
-    return;
-  }
-  const t = s.totals;
-  const app = document.getElementById("app");
-  app.innerHTML = "";
-
-  // cards
-  const cards = el(`<div class="cards"></div>`);
-  cards.append(
-    el(`<div class="card"><div class="k">Settlements</div><div class="v">${USDC(t.txs)}</div><div class="s">EIP-3009 payments settled</div></div>`),
-    el(`<div class="card"><div class="k">Volume</div><div class="v">$${USDC(t.volume_usdc)}</div><div class="s">USDC paid, all time</div></div>`),
-    el(`<div class="card"><div class="k">Buyers</div><div class="v">${USDC(t.buyers)}</div><div class="s">unique paying wallets</div></div>`),
-    el(`<div class="card"><div class="k">Sellers</div><div class="v">${USDC(t.sellers)}</div><div class="s">unique payTo recipients</div></div>`)
-  );
-  app.append(cards);
-
-  // chain breakdown
-  const chainNames = Object.keys(s.chains || {});
-  if (chainNames.length > 1) {
-    const cp = el(`<div class="panel" style="margin-top:14px"></div>`);
-    const ct = el(`<table><thead><tr><th>Chain</th><th class="right">Settlements</th><th class="right">Volume (USDC)</th><th class="right">Buyers</th><th class="right">Sellers</th></tr></thead><tbody></tbody></table>`);
-    const ctb = ct.querySelector("tbody");
-    for (const ch of chainNames) {
-      const c = s.chains[ch];
-      ctb.append(el(`<tr><td><b>${ch}</b></td><td class="right">${USDC(c.txs)}</td><td class="right">${USDC(c.volume_usdc)}</td><td class="right">${USDC(c.buyers)}</td><td class="right">${USDC(c.sellers)}</td></tr>`));
-    }
-    cp.append(ct);
-    app.append(cp);
-  }
-
-  // MPP / Tempo (sampled estimate — counted and sampled are never merged)
-  if (s.tempo_mpp) {
-    const tm = s.tempo_mpp;
-    app.append(el(`<div class="panel" style="margin-top:14px">
-      <div style="padding:10px 12px">
-        <b>MPP · ${tm.chain}</b> <span class="mono">(chain ${tm.chain_id})</span> —
-        est <b>~${USDC(tm.est_daily_txs)}</b> txs/day, block <span class="mono">${USDC(tm.latest_block)}</span>,
-        last sample ${tm.last_sample_ts}.
-        <span style="color:var(--dim)">Sampled hourly via the public keyless Tempo API — an estimate,
-        deliberately never merged into the counted totals above. Raw chain activity, not all txs are MPP payments.</span>
-        <a href="data/mpp.json" style="margin-left:6px">mpp.json →</a>
-      </div></div>`));
-  }
-
-  // daily chart
-  app.append(el(`<h2>Settlements per day <span>· since ${s.daily[0] ? s.daily[0].day : "launch"}</span></h2>`));
-  const pc = el(`<div class="panel"></div>`);
-  if(s.daily.length === 0){
-    pc.append(el(`<div class="empty">No settlements indexed yet.</div>`));
-  }else{
-    const ch = el(`<div class="chart"></div>`);
-    const max = Math.max(...s.daily.map(d=>d.txs), 1);
-    const today = new Date().toISOString().slice(0, 10);
-    for(const d of s.daily){
-      const partial = d.day === today;
-      const b = el(`<div class="bar${partial ? " partial" : ""}" style="height:${Math.max(2, d.txs/max*150)}px"><span class="tip">${d.day}: ${USDC(d.txs)} txs · $${USDC(d.volume)}${partial ? " · in progress" : ""}</span></div>`);
-      ch.append(b);
-    }
-    pc.append(ch);
-    pc.append(el(`<div class="chart-x"><span>${s.daily[0].day}</span><span>${s.daily[s.daily.length-1].day}</span></div>`));
-  }
-  app.append(pc);
-
-  // buckets
-  app.append(el(`<h2>Payment size distribution <span>· what do machines actually pay?</span></h2>`));
-  const bp = el(`<div class="panel"></div>`);
-  const bk = el(`<div class="bk"></div>`);
-  const bmax = Math.max(...s.buckets.map(b=>b.txs), 1);
-  for(const b of s.buckets){
-    bk.append(el(`<div class="bk-row"><span class="lbl">$${b.bucket.replace("1-10","1–10").replace("10-100","10–100").replace("100-1k","100–1k")}</span>
-      <div class="track"><div class="fill" style="width:${b.txs/bmax*100}%"></div></div>
-      <span class="num">${USDC(b.txs)} txs · $${USDC(b.volume)}</span></div>`));
-  }
-  bp.append(bk);
-  app.append(bp);
-
-  // sellers
-  app.append(el(`<h2>Top sellers <span>· payTo addresses by volume received</span></h2>`));
-  const tp = el(`<div class="panel"></div>`);
-  if(s.top_sellers.length === 0){
-    tp.append(el(`<div class="empty">No sellers indexed yet.</div>`));
-  }else{
-    const tbl = el(`<table><thead><tr><th>#</th><th>Address</th><th class="right">Settlements</th><th class="right">Volume (USDC)</th></tr></thead><tbody></tbody></table>`);
-    const tb = tbl.querySelector("tbody");
-    s.top_sellers.forEach((x,i)=>{
-      tb.append(el(`<tr><td class="mono">${i+1}</td><td>${addr(x.addr_full)}</td><td class="right">${USDC(x.txs)}</td><td class="right">${USDC(x.volume)}</td></tr>`));
-    });
-    tp.append(tbl);
-  }
-  app.append(tp);
-
-  // updated
-  app.append(el(`<p style="margin-top:24px;color:var(--dim);font-size:12px">Chain: ${s.chain} · last update: ${s.updated_at}</p>`));
-}
-main();
+const fmtUSD = v => v >= 1e6 ? "$" + (v/1e6).toFixed(2) + "M" : v >= 1e3 ? "$" + (v/1e3).toFixed(1) + "k" : "$" + Number(v).toFixed(0);
+const fmtN = v => Number(v).toLocaleString("en-US");
+const short = a => a.slice(0, 8) + "…" + a.slice(-6);
+const EXPLORER = a => `href="https://paycensus.com/explorer.html?addr=${a}" target="_blank"`;
+fetch("/data/rank.json").then(r => r.json()).then(d => {
+  document.getElementById("gen").textContent = d.generated_at;
+  document.getElementById("cRanked").textContent = fmtN(d.count);
+  document.getElementById("cVerified").textContent = fmtN((d.ranked || []).filter(r => r.verified).length);
+  document.getElementById("cDemand").textContent = fmtN((d.ranked || []).filter(r => r.bazaar_payers30 > 0).length) + " / " + fmtN(d.count);
+  document.querySelector("#tRank tbody").innerHTML = (d.ranked || []).map((r, i) =>
+    `<tr><td class="right">${i+1}</td><td class="right"><b>${r.score}</b></td>` +
+    `<td class="mono"><a ${EXPLORER(r.addr)}>${short(r.addr)}</a></td>` +
+    `<td class="mono">${r.domain ? `<a href="https://${r.domain}" target="_blank">${r.domain}</a>` : '<span class="muted">—</span>'}</td>` +
+    `<td class="right">${fmtUSD(r.volume)}</td><td class="right">${fmtN(r.buyers)}</td>` +
+    `<td class="right">$${r.avg_ticket}</td>` +
+    `<td>${r.verified ? '<span class="badge">verified</span>' : (r.identity === 0.5 ? '<span class="muted">attributed</span>' : '<span class="muted">unknown</span>')}</td>` +
+    `<td class="right">${r.bazaar_payers30 ? fmtN(r.bazaar_payers30) : '—'}</td></tr>`).join("");
+}).catch(() => { document.getElementById("gen").textContent = "unavailable"; });
 </script>
 </body>
 </html>
