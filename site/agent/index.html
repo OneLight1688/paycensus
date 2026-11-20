@@ -137,5 +137,6 @@ fetch("/data/rank.json").then(r => r.json()).then(d => {
     `<td class="right">${r.bazaar_payers30 ? fmtN(r.bazaar_payers30) : '—'}</td></tr>`).join("");
 }).catch(() => { document.getElementById("gen").textContent = "unavailable"; });
 </script>
+<script src="https://paycensus.com/share.js" async></script>
 </body>
 </html>

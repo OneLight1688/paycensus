@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<title>PayCensus Trust — badge assets</title>
+<meta name="description" content="Downloadable PayCensus Trust badge assets and embed code for verified sellers.">
+<meta name="robots" content="index,follow">
+<style>
+body{font-family:system-ui;max-width:880px;margin:24px auto;padding:0 16px;background:#12141a;color:#e8e8e8}
+a{color:#f6821f;text-decoration:none}a:hover{text-decoration:underline}
+h1{font-size:22px}h2{font-size:16px;border-bottom:1px solid #333;padding-bottom:4px;margin-top:28px}
+.muted{color:#9aa0aa}.mono{font-family:ui-monospace,Menlo,Consolas,monospace}
+.panel{background:#191c24;border:1px solid #2a2d36;border-radius:8px;padding:14px;margin-bottom:14px}
+table{width:100%;border-collapse:collapse;font-size:13px}td,th{padding:6px 8px;border-bottom:1px solid #2a2d36;text-align:left}
+code{background:#0e1015;border:1px solid #2a2d36;border-radius:6px;padding:8px 10px;display:block;white-space:pre-wrap;word-break:break-all;color:#cdd3dc;font-size:12px}
+img.badge{border-radius:10px;display:block;max-width:100%}
+.logo{height:22px;vertical-align:middle;margin-right:8px}
+</style></head>
+<body>
+<p><img src="/logo.png" class="logo" alt=""> <b>PayCensus Trust</b> <span class="muted">· badge assets &amp; embed code</span></p>
+
+<h1 style="margin:10px 0">Badge assets for verified sellers</h1>
+<p class="muted">For sellers with an active PayCensus verification. The static badge states facts about your entity; the live badge below is always accurate and self-revoking if copied.</p>
+
+<h2>1 · Live badge — recommended</h2>
+<div class="panel">
+<p>Checks your verification status on every page load. If your verification lapses or the snippet is copied to an unverified site, it shows <b>not verified</b> by design.</p>
+<code>&lt;script src="https://trust.paycensus.com/badge.js" data-domain="YOUR_DOMAIN"&gt;&lt;/script&gt;</code>
+</div>
+
+<h2>2 · Notarized seal (Verified / Verified+ subscribers)</h2>
+<div class="panel">
+<code>&lt;img src="https://trust.paycensus.com/api/seal.svg?addr=YOUR_ADDRESS" alt="PayCensus Verified seal" style="width:220px"&gt;</code>
+<p class="muted">Generated server-side from the live verification record (402 for non-subscribers).</p>
+</div>
+
+<h2>3 · Static badge downloads</h2>
+<div class="panel">
+<table>
+<tr><th>File</th><th>Use</th></tr>
+<tr><td><a href="/assets/badge-dark.png">badge-dark.png</a> · <a href="/assets/badge-dark@2x.png">@2x</a> · <a href="/assets/badge-dark.svg">.svg</a></td><td>dark sites</td></tr>
+<tr><td><a href="/assets/badge-light.png">badge-light.png</a> · <a href="/assets/badge-light@2x.png">@2x</a> · <a href="/assets/badge-light.svg">.svg</a></td><td>light sites</td></tr>
+<tr><td><a href="/assets/badge-pack.zip">badge-pack.zip</a></td><td>everything + README (usage rules)</td></tr>
+</table>
+<p><img class="badge" src="/assets/badge-dark.png" alt="dark badge" style="background:#12141a;border:1px solid #2a2d36">
+<img class="badge" src="/assets/badge-light.png" alt="light badge" style="background:#fff;border:1px solid #d8dce4"></p>
+</div>
+
+<h2>Usage rules — short version</h2>
+<div class="panel">
+<ol>
+<li>Only entities with <b>active</b> verification may display the badge; remove it if verification lapses or is revoked.</li>
+<li>Do not alter, recolor, crop or animate the badge.</li>
+<li>Link the badge to <a href="/verify.html">verify.html</a> (the live widget does this automatically).</li>
+<li>The live status page is always authoritative over any static image.</li>
+</ol>
+<p class="muted">Full rules in the pack README. Verification states facts, not opinions — see the <a href="/tos.html">terms</a>.</p>
+</div>
+
+<p class="muted"><a href="/">← Trust home</a> · <a href="/verify.html">verify</a> · <a href="/api.html">API</a> · <a href="/revocations.html">revocations</a> · <a href="/tos.html">terms</a></p>
+<script src="https://paycensus.com/share.js" async></script>
+</body></html>

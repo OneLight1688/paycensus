@@ -98,4 +98,5 @@ fetch("data/indices.json?ts=" + Date.now()).then(r => r.json()).then(d => {
     `${t.definition || ""} Currently: ${t.verified} verified · ${t.revoked} revoked · ${t.attributed_entities} attributed entities.`);
 }).catch(() => { document.getElementById("gi").innerHTML = '<p class="dim">indices.json not available yet</p>'; });
 </script>
+<script src="https://paycensus.com/share.js" async></script>
 </body></html>

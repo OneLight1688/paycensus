@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<title>Revocations — PayCensus Trust</title>
+<style>
+body{font-family:system-ui;max-width:820px;margin:24px auto;padding:0 16px;background:#12141a;color:#e8e8e8}
+a{color:#f6821f;text-decoration:none}
+h1{font-size:20px}.muted{color:#9aa0aa}.mono{font-family:ui-monospace,Menlo,Consolas,monospace}
+table{width:100%;border-collapse:collapse;font-size:13px}td,th{padding:6px 8px;border-bottom:1px solid #2a2d36;text-align:left}
+.bad{color:#ef5350;font-weight:600}.logo{height:20px;vertical-align:middle;margin-right:8px}
+</style></head>
+<body>
+<p><img src="/logo.png" class="logo" alt=""> <b>PayCensus Trust</b> <span class="muted">· revocations (public, append-only)</span></p>
+<h1>Revocation list</h1>
+<p class="muted">Every revocation and reinstatement is recorded here, forever. Deterministic outcomes only — a revocation states that re-verification failed, never that a party is dishonest.</p>
+<table><thead><tr><th>revoked</th><th>domain</th><th>address</th><th>reason</th><th>reinstated</th></tr></thead>
+<tbody id="rows"><tr><td colspan="5" class="muted">loading…</td></tr></tbody></table>
+<p class="muted" style="font-size:12px"><a href="/">← Trust home</a> · machine feed: <a class="mono" href="/api/revocations">/api/revocations</a></p>
+<script>
+fetch("/api/revocations").then(r=>r.json()).then(d=>{
+  const t=document.getElementById("rows");
+  const rs=d.revocations||[];
+  if(!rs.length){t.innerHTML='<tr><td colspan="5" class="muted">No revocations — clean since genesis.</td></tr>';return;}
+  t.innerHTML=rs.map(x=>`<tr><td class="mono">${x.revoked_at}</td><td class="mono">${x.domain}</td><td class="mono">${(x.addr||"").slice(0,14)}…</td><td class="mono">${x.reason||""}</td><td>${x.reinstated_at?x.reinstated_at:"—"}</td></tr>`).join("");
+}).catch(()=>{document.getElementById("rows").innerHTML='<tr><td colspan="5" class="muted">feed unavailable</td></tr>';});
+</script>
+<script src="https://paycensus.com/share.js" async></script>
+</body></html>

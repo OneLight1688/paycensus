@@ -16,6 +16,7 @@ table{width:100%;border-collapse:collapse;font-size:13px}td,th{padding:6px 8px;b
 <p><b>PayCensus dogfood</b> <span class="muted">· <a href="/">agent.paycensus.com</a></span></p>
 <h1>Our agent buys from our own rankings — weekly, with real money</h1>
 <p class="muted">An automated agent of ours uses Agent Trust Rank data to pick a machine-payable endpoint, pays with USDC via x402 on Base, and records the outcome here. <b>We publish failures too</b> — a metric only means something if it can go down. Selection: triple evidence (Bazaar listing ∩ our on-chain census ∩ real_commerce class). Self-limit $0.50/purchase. Private key never leaves our server.</p>
+<p class="muted">Every purchase below is governed by <a href="https://gate.paycensus.com/">Gate</a> (ASPL v0.1): monthly budget, merchant allowlist, auto-approve threshold, hash-linked audit — <a href="https://gate.paycensus.com/dashboard.html">live audit trail</a>.</p>
 
 <h2>Live metric</h2>
 <div class="panel"><span class="big" id="okN">…</span> purchases OK · <span id="spent" style="font-size:16px">$…</span> spent · last purchase <span id="upd">…</span></div>
@@ -24,7 +25,7 @@ table{width:100%;border-collapse:collapse;font-size:13px}td,th{padding:6px 8px;b
 <div class="panel"><table id="tBuy"><thead><tr><th>When (UTC)</th><th>Resource</th><th class="right">Price</th><th>PayTo</th><th>HTTP</th></tr></thead><tbody><tr><td colspan="5" class="muted">loading…</td></tr></tbody></table></div>
 
 <h2>Merchant probe <em>· free weekly check, no payment</em></h2>
-<div class="panel"><table id="tProbe"><thead><tr><th>Resource</th><th class="right">402</th><th class="right">Price</th><th class="right">payTo = census</th><th class="right">30d payers</th></tr></thead><tbody><tr><td colspan="5" class="muted">loading…</td></tr></tbody></table></div>
+<div class="panel"><table id="tProbe"><thead><tr><th>Resource</th><th class="right">402</th><th class="right">Price</th><th class="right">payTo = census</th><th class="right">30d payers</th><th>Rails</th></tr></thead><tbody><tr><td colspan="6" class="muted">loading…</td></tr></tbody></table></div>
 
 <p class="muted">We are the publisher of the rankings; treat this page as a demonstration of our data pipeline, not an endorsement of any merchant. Related: <a href="/">Agent Trust Rank</a> · <a href="https://trust.paycensus.com">Trust verification</a> · <a href="https://paycensus.com">Data layer</a></p>
 
@@ -44,8 +45,9 @@ const esc=s=>String(s==null?"":s).replace(/&/g,"&amp;").replace(/</g,"&lt;");
   }catch(e){document.getElementById("okN").textContent="?";}
   try{
     const pr=await (await fetch("/data/dogfood_probe.json")).json();
-    document.querySelector("#tProbe tbody").innerHTML=(pr.results||[]).map(r=>'<tr><td class="mono">'+esc((r.resource||"").slice(0,55))+'</td><td class="right">'+(r.serves_402?'<span class="ok">402</span>':('<span class="bad">'+esc(r.http_status)+'</span>'))+'</td><td class="right">'+(r.price_usd!=null?"$"+esc(r.price_usd):"—")+'</td><td class="right">'+(r.payto_matches_our_addr===true?'<span class="ok">yes</span>':(r.payto_matches_our_addr===false?'<span class="bad">no</span>':"—"))+'</td><td class="right">'+esc(r.bazaar_payers30)+'</td></tr>').join("");
+    document.querySelector("#tProbe tbody").innerHTML=(pr.results||[]).map(r=>'<tr><td class="mono">'+esc((r.resource||"").slice(0,55))+'</td><td class="right">'+(r.serves_402?'<span class="ok">402</span>':('<span class="bad">'+esc(r.http_status)+'</span>'))+'</td><td class="right">'+(r.price_usd!=null?"$"+esc(r.price_usd):"—")+'</td><td class="right">'+(r.payto_matches_our_addr===true?'<span class="ok">yes</span>':(r.payto_matches_our_addr===false?'<span class="bad">no</span>':"—"))+'</td><td class="right">'+esc(r.bazaar_payers30)+'</td><td class="mono">'+esc((r.rails||[]).join(","))+'</td></tr>').join("");
   }catch(e){}
 })();
 </script>
+<script src="https://paycensus.com/share.js" async></script>
 </body></html>

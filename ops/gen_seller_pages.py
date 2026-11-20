@@ -70,6 +70,7 @@ fetch("https://trust.paycensus.com/api/status?addr={addr}").then(r=>r.json()).th
   else{{el.textContent="✗ NOT VERIFIED — buyers cannot prove payments reach this seller";el.style.color="#ef5350";}}
 }}).catch(()=>{{document.getElementById("st").textContent="status unavailable";}});
 </script>
+<script src="https://paycensus.com/share.js" async></script>
 </body></html>"""
 
 
