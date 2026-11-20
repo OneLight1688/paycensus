@@ -144,7 +144,25 @@ audit:
     <li>Retries and failures are reported, not hidden</li>
   </ul></div>
 
-  <h2>7. Status</h2>
+  <h2>8. Multi-user &amp; roles <em>· planned v0.2</em></h2>
+  <p class="lead" style="margin-top:0">An enterprise gateway is operated by several people with different duties.
+  The minimal role model:</p>
+  <div class="panel"><table>
+    <thead><tr><th>Role</th><th>Permissions</th></tr></thead>
+    <tbody>
+      <tr><td><code>admin</code></td><td>write policies, register agent identities, manage users</td></tr>
+      <tr><td><code>approver</code></td><td>approve / reject pending intents above the auto-approve threshold</td></tr>
+      <tr><td><code>operator</code></td><td>register agents, view dashboards and reports</td></tr>
+      <tr><td><code>auditor</code></td><td>read-only: audit chain, reports, policy history</td></tr>
+    </tbody>
+  </table></div>
+  <p style="margin-top:10px">Requirements: approvals are authenticated (anonymous approvals are invalid);
+  policy changes require <code>admin</code> plus the configured key source (§7); human users and agent
+  identities are separate namespaces — the audit chain records both; implementations map roles onto
+  the enterprise's existing IdP (OIDC / SAML) instead of inventing a user system, and MUST NOT store
+  passwords when an IdP is configured.</p>
+
+  <h2>9. Status</h2>
   <p>v0.1 is a draft implemented by the Gate reference engine and exercised in production dogfood
   (<a href="https://agent.paycensus.com/dogfood.html">live audit trail</a>). Breaking changes will be versioned,
   never silently changed. Comments and field proposals welcome.</p>
