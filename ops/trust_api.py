@@ -399,6 +399,13 @@ def db():
         pass
     c.execute("""CREATE TABLE IF NOT EXISTS api_log(
         ts TEXT, key_id INTEGER, endpoint TEXT, ip TEXT)""")
+    c.execute("""CREATE TABLE IF NOT EXISTS seller_profiles(
+        domain TEXT PRIMARY KEY, data TEXT NOT NULL,
+        fetched_at TEXT, ok INTEGER DEFAULT 0, error TEXT)""")
+    c.execute("""CREATE TABLE IF NOT EXISTS seller_addresses(
+        vid INTEGER NOT NULL, chain TEXT NOT NULL, addr TEXT NOT NULL,
+        proven INTEGER DEFAULT 0, created_at TEXT,
+        PRIMARY KEY(vid, chain, addr))""")
     return c
 
 
@@ -1778,6 +1785,42 @@ def limited(ip, cap=30):
     return _hits[key] <= cap
 
 
+_B58ALPHA = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz"
+
+
+def _b58d(s):
+    """Base58 decode (bitcoin alphabet, leading-'1' zero padding)."""
+    n = 0
+    for ch in s:
+        i = _B58ALPHA.find(ch)
+        if i < 0:
+            raise ValueError("invalid base58 char")
+        n = n * 58 + i
+    raw = n.to_bytes((n.bit_length() + 7) // 8, "big")
+    pad = 0
+    for ch in s:
+        if ch == "1":
+            pad += 1
+        else:
+            break
+    return b"\x00" * pad + raw
+
+
+def solana_addr_verify(addr, sig_b58, msg):
+    """True iff sig_b58 is a valid ed25519 signature of msg by addr (base58
+    Solana pubkey = 32-byte ed25519 public key)."""
+    pub = _b58d(addr)
+    sig = _b58d(sig_b58)
+    if len(pub) != 32 or len(sig) != 64:
+        return False
+    try:
+        from nacl.signing import VerifyKey
+        VerifyKey(pub).verify(msg, sig)
+        return True
+    except Exception:  # noqa: BLE001
+        return False
+
+
 class Handler(BaseHTTPRequestHandler):
     def _cors(self):
         self.send_header("Access-Control-Allow-Origin", "*")
@@ -2108,6 +2151,95 @@ class Handler(BaseHTTPRequestHandler):
         return self.json_out(200, {"agent": arow["name"],
                                    "dept": arow["dept"], "decision": res})
 
+    def _read_json_body(self):
+        n = 0
+        try:
+            n = int(self.headers.get("Content-Length") or 0)
+        except ValueError:
+            n = 0
+        if n > 65536:
+            return {}
+        raw = self.rfile.read(n) if n else b""
+        try:
+            return json.loads(raw.decode("utf-8") or "{}")
+        except ValueError:
+            return {}
+
+    def profile_api(self, q):
+        conn = db()
+        dom = (q.get("domain") or "").strip().lower()
+        if not dom or not DOMAIN_RE.match(dom):
+            conn.close()
+            return self.json_out(400, {"error": "valid domain required"})
+        v = conn.execute(
+            "SELECT id, addr, addr_proven, status FROM verifications "
+            "WHERE domain=? ORDER BY id DESC LIMIT 1", (dom,)).fetchone()
+        if v is None:
+            conn.close()
+            return self.json_out(404, {"error": "unknown domain"})
+        verified = v["status"] == "verified"
+        addrs = []
+        if verified:
+            addrs.append({"chain": "evm", "addr": v["addr"],
+                          "proven": int(v["addr_proven"] or 0)})
+            for r in conn.execute(
+                    "SELECT chain, addr, proven FROM seller_addresses "
+                    "WHERE vid=? ORDER BY chain, addr", (v["id"],)):
+                addrs.append({"chain": r["chain"], "addr": r["addr"],
+                              "proven": int(r["proven"] or 0)})
+        sp = conn.execute(
+            "SELECT data, fetched_at, ok FROM seller_profiles "
+            "WHERE domain=?", (dom,)).fetchone()
+        conn.close()
+        wk = None
+        if sp and sp["ok"]:
+            try:
+                wk = json.loads(sp["data"]).get("profile")
+            except ValueError:
+                wk = None
+        return self.json_out(200, {
+            "domain": dom, "verified": verified, "vid": v["id"],
+            "addresses": addrs,
+            "wellknown": wk,
+            "wellknown_fetched_at": sp["fetched_at"] if sp else None})
+
+    def solana_proof(self):
+        conn = db()
+        body = self._read_json_body()
+        try:
+            vid = int(body.get("vid") or 0)
+        except ValueError:
+            vid = 0
+        addr = (body.get("addr") or "").strip()
+        sig = (body.get("signature") or "").strip()
+        r = conn.execute(
+            "SELECT id, nonce, status FROM verifications WHERE id=?",
+            (vid,)).fetchone()
+        if r is None:
+            conn.close()
+            return self.json_out(404, {"error": "unknown vid"})
+        if r["status"] != "verified":
+            conn.close()
+            return self.json_out(400, {"error": "domain not verified"})
+        if not addr or not sig:
+            conn.close()
+            return self.json_out(400,
+                {"error": "addr and signature (base58) required"})
+        msg = ("paycensus-addr-proof=" + r["nonce"]).encode()
+        if not solana_addr_verify(addr, sig, msg):
+            conn.close()
+            return self.json_out(400,
+                {"error": "signature verification failed"})
+        conn.execute(
+            "INSERT OR REPLACE INTO seller_addresses"
+            "(vid, chain, addr, proven, created_at) VALUES(?,?,?,?,?)",
+            (vid, "solana", addr, 1, ts()))
+        conn.commit()
+        conn.close()
+        return self.json_out(200,
+            {"ok": True, "vid": vid, "chain": "solana", "addr": addr,
+             "note": "address bound to verified domain profile"})
+
     def do_GET(self):
         ip = self.client_address[0]
         if not limited(ip):
@@ -2128,6 +2260,8 @@ class Handler(BaseHTTPRequestHandler):
                             "Domain control only — not a guarantee of honesty, "
                             "solvency, or legality. Revocations are public and "
                             "append-only."})
+            if path == "/api/profile":
+                return self.profile_api(q)
             if path == "/api/status":
                 a = q.get("addr", "")
                 d = q.get("domain", "")
@@ -2541,6 +2675,8 @@ class Handler(BaseHTTPRequestHandler):
         path = self.path
         if path.startswith("/api/gate/"):
             return self.gate_post(path.partition("?")[0])
+        if path == "/api/verify/addr-proof-solana":
+            return self.solana_proof()
         # --- Stripe webhook: raw body, signature-verified, outside JSON/honeypot ---
         if path == "/api/stripe/webhook":
             try:
