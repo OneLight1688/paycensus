@@ -419,10 +419,37 @@ def cmd_settle():
         try:
             signed = acct.sign_transaction(tx)
             raw = getattr(signed, "raw_transaction", None) or signed.rawTransaction
-            r = rpc("eth_sendRawTransaction", ["0x" + raw.hex().removeprefix("0x")])
+            raw_hex = "0x" + raw.hex().removeprefix("0x")
+            r = rpc("eth_sendRawTransaction", [raw_hex])
+            h = str(r.get("result") or "")
+            ok = False
+            for _ in range(12):  # poll ~60s
+                time.sleep(5)
+                rec = (rpc("eth_getTransactionReceipt", [h]) or {}).get("result")
+                if rec:
+                    ok = rec.get("status") == "0x1"
+                    print(("mined ok:" if ok else "mined FAILED:"), h[:22],
+                          "| gasUsed", int(rec["gasUsed"], 16))
+                    break
+            if not ok and h:
+                tx["gasPrice"] = gp * 4  # replacement tx, same nonce
+                signed = acct.sign_transaction(tx)
+                raw2 = getattr(signed, "raw_transaction", None) or signed.rawTransaction
+                raw2_hex = "0x" + raw2.hex().removeprefix("0x")
+                try:
+                    rpc("eth_sendRawTransaction", [raw2_hex])
+                except Exception:
+                    pass
+                for _ in range(12):
+                    time.sleep(5)
+                    rec = (rpc("eth_getTransactionReceipt", [h]) or {}).get("result")
+                    if rec:
+                        ok = rec.get("status") == "0x1"
+                        print(("rebroadcast mined ok:" if ok else "rebroadcast FAILED:"), h[:22])
+                        break
             conn.execute("UPDATE x402_paid SET status='sent' WHERE nonce=?", (nh,))
             sent += 1
-            print("sent:", str(r.get("result"))[:66])
+            print("sent:", h[:66])
         except Exception as ex:
             print("tx fail:", repr(ex)[:120])
     conn.commit()
