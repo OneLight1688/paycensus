@@ -152,6 +152,9 @@ def cmd_probe(n=5):
             entry["body_preview"] = body.decode("utf-8", "replace")[:200]
             try:
                 bodyj = json.loads(body.decode("utf-8", "replace"))
+                entry["rails"] = [r.get("rail") for r in
+                                  (bodyj.get("payment_rails") or [])
+                                  if isinstance(r, dict)]
                 accs = bodyj.get("accepts")
                 pr = bodyj.get("paymentRequired")
                 if not isinstance(accs, list) or not accs:
@@ -223,7 +226,7 @@ def build_payment(pk, from_addr, to_addr, value_units, nonce=None,
           + int(now - 60).to_bytes(32, "big")
           + int(now + 600).to_bytes(32, "big")
           + nonce)
-    digest = keccak(b"\x19\x01" + dsep + sh)
+    digest = keccak(b"" + dsep + keccak(sh))
     sig = pk.sign_msg_hash(digest)
     r, s, v = sig[:32], sig[32:64], sig[64] + 27
     payload = {
@@ -375,6 +378,56 @@ def cmd_cron():
         print("cron: no buyable target this week")
 
 
+def cmd_settle():
+    """Broadcast unsettled x402 authorizations (needs gas ETH in payTo wallet)."""
+    from eth_account import Account
+    conn = sqlite3.connect("/var/lib/paycensus/trust.db")
+    try:
+        rows = conn.execute("SELECT nonce, from_addr, to_addr, value, valid_after, valid_before, signature FROM x402_paid WHERE status='unsettled'").fetchall()
+    except sqlite3.OperationalError as e:
+        print("no x402_paid table:", e)
+        return
+    if not rows:
+        print("nothing to settle")
+        return
+    pk_hex = open(WALLET).read().strip().removeprefix("0x")
+    acct = Account.from_key(pk_hex)
+    eth = int(rpc("eth_getBalance", [acct.address, "latest"])["result"], 16) / 1e18
+    print("payTo wallet", acct.address, "ETH=%.6f" % eth)
+    if eth < 0.0002:
+        print("insufficient gas ETH - fund the payTo wallet to settle",
+              len(rows), "authorizations")
+        return
+    gp = int(rpc("eth_gasPrice", [])["result"], 16)
+    n0 = int(rpc("eth_getTransactionCount", [acct.address, "pending"])["result"], 16)
+    from eth_utils import keccak as _kc
+    sel = _kc(b"transferWithAuthorization(address,address,uint256,uint256,uint256,bytes32,uint8,bytes32,bytes32)")[:4]
+    nowx = int(time.time())
+    sent = 0
+    for i, (nh, fa, ta, val, va, vb, sg) in enumerate(rows):
+        if vb < nowx:
+            print("skip expired:", nh[:16])
+            continue
+        sb = bytes.fromhex(sg.removeprefix("0x"))
+        vv = sb[64] - 27 if sb[64] >= 27 else sb[64]
+        p32 = lambda x: bytes.fromhex(str(x).lower().removeprefix("0x").rjust(64, "0"))
+        data = sel + p32(fa) + p32(ta) + int(val).to_bytes(32, "big") + int(va).to_bytes(32, "big") + int(vb).to_bytes(32, "big") + bytes.fromhex(nh.removeprefix("0x")) + vv.to_bytes(32, "big") + sb[:32] + sb[32:64]
+        tx = {"to": USDC_BASE, "data": "0x" + data.hex(), "gas": 120000,
+              "gasPrice": gp, "nonce": n0 + i, "chainId": 8453, "value": 0}
+        try:
+            signed = acct.sign_transaction(tx)
+            raw = getattr(signed, "raw_transaction", None) or signed.rawTransaction
+            r = rpc("eth_sendRawTransaction", ["0x" + raw.hex().removeprefix("0x")])
+            conn.execute("UPDATE x402_paid SET status='sent' WHERE nonce=?", (nh,))
+            sent += 1
+            print("sent:", str(r.get("result"))[:66])
+        except Exception as ex:
+            print("tx fail:", repr(ex)[:120])
+    conn.commit()
+    conn.close()
+    print("settled/sent:", sent, "of", len(rows))
+
+
 if __name__ == "__main__":
     cmd = sys.argv[1] if len(sys.argv) > 1 else "wallet"
     if cmd == "wallet":
@@ -387,5 +440,7 @@ if __name__ == "__main__":
         cmd_pay(sys.argv[2])
     elif cmd == "cron":
         cmd_cron()
+    elif cmd == "settle":
+        cmd_settle()
     else:
         sys.exit(__doc__)

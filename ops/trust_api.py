@@ -26,6 +26,7 @@ import os
 import re
 import secrets
 import smtplib
+from eth_utils import keccak
 import socket
 import sqlite3
 import ssl
@@ -59,6 +60,13 @@ FOUNDING_TOTAL = 100
 FOUNDING_PRICE_CENTS = 9900
 LIST_PRICE_CENTS = 19900
 FREE_CALLS_DAY = 10
+
+# x402 machine-payable resource (agent.paycensus.com/api/x402/rank)
+X402_PAYTO = "0x3b41b777336e079cDdd40898D6eE3A1fc8D8777b"
+X402_PRICE = 1000
+X402_USDC = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913"
+X402_AUTH_TYPEHASH = keccak(b"TransferWithAuthorization(address from,address to,uint256 value,uint256 validAfter,uint256 validBefore,bytes32 nonce)")
+X402_DOMAIN_SEP = keccak(keccak(b"EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)") + keccak(b"USD Coin") + keccak(b"2") + (8453).to_bytes(32, "big") + bytes.fromhex(X402_USDC[2:].rjust(64, "0")))
 AGENT_CALLS_FREE = 1000
 STRIPE_API = "https://api.stripe.com/v1"
 STRIPE_CFG = "/opt/paycensus/.trust_stripe"
@@ -2131,6 +2139,93 @@ class Handler(BaseHTTPRequestHandler):
                 out = admin_anomalies(conn)
                 conn.close()
                 return self.json_out(200, out)
+            if path == "/api/x402/rank":
+                conn = db()
+                hdr = self.headers.get("X-PAYMENT")
+                if not hdr:
+                    conn.close()
+                    return self.json_out(402, {
+                        "x402Version": 2,
+                        "resource": {"url": "https://agent.paycensus.com/api/x402/rank",
+                                     "description": "Agent Trust Rank: machine-payable x402 endpoints scored from real settlement behaviour",
+                                     "mimeType": "application/json"},
+                        "accepts": [{"scheme": "exact", "network": "eip155:8453",
+                                     "asset": X402_USDC, "amount": str(X402_PRICE),
+                                     "maxAmountRequired": str(X402_PRICE),
+                                     "payTo": X402_PAYTO, "maxTimeoutSeconds": 3600,
+                                     "extra": {"name": "USD Coin", "version": "2",
+                                               "credentialTypes": ["authorization"]}}],
+                        "extensions": {"bazaar": {"info": {"input": {"type": "http", "method": "GET"}, "output": {"type": "json", "example": {"ranked": []}}}, "schema": {"$schema": "https://json-schema.org/draft/2020-12/schema", "type": "object"}}},
+                        "error": "Payment required"})
+                import base64 as _b64
+                try:
+                    pl = json.loads(_b64.b64decode(hdr))
+                except Exception as ex:
+                    conn.close()
+                    return self.json_out(400, {"error": "bad X-PAYMENT encoding: " + repr(ex)[:80]})
+                acc = pl.get("accepted") or {}
+                inner = pl.get("payload") or pl.get("paymentPayload") or {}
+                auth = inner.get("authorization") or {}
+                sig = inner.get("signature") or ""
+                if int(acc.get("amount") or 0) != X402_PRICE or int(auth.get("value") or 0) != X402_PRICE:
+                    conn.close()
+                    return self.json_out(400, {"error": "amount mismatch with offer"})
+                if (acc.get("payTo") or "").lower() != X402_PAYTO.lower() or (auth.get("to") or "").lower() != X402_PAYTO.lower():
+                    conn.close()
+                    return self.json_out(400, {"error": "wrong payTo"})
+                nowx = int(utcnow().timestamp())
+                try:
+                    vb = int(auth.get("validBefore") or 0)
+                    va = int(auth.get("validAfter") or 0)
+                except (TypeError, ValueError):
+                    vb = va = 0
+                if vb < nowx or va > nowx:
+                    conn.close()
+                    return self.json_out(400, {"error": "authorization expired or not yet valid"})
+                try:
+                    from eth_utils import keccak as _kc
+                    from eth_keys import keys as _ek
+                    s2 = sig[2:] if sig.startswith("0x") else sig
+                    sb = bytes.fromhex(s2)
+                    if len(sb) != 65:
+                        raise ValueError("signature must be 65 bytes")
+                    vv = sb[64] - 27 if sb[64] >= 27 else sb[64]
+                    nhex = auth.get("nonce", "")
+                    nhex = nhex[2:] if nhex.startswith("0x") else nhex
+                    nb = bytes.fromhex(nhex)
+                    if len(nb) != 32:
+                        raise ValueError("nonce must be 32 bytes")
+                    p32 = lambda x: bytes.fromhex(str(x).lower().removeprefix("0x").rjust(64, "0"))
+                    sh = (X402_AUTH_TYPEHASH + p32(auth.get("from")) + p32(auth.get("to"))
+                          + int(auth["value"]).to_bytes(32, "big")
+                          + int(va).to_bytes(32, "big") + int(vb).to_bytes(32, "big") + nb)
+                    digest = _kc(b"\x19\x01" + X402_DOMAIN_SEP + _kc(sh))
+                    rec = _ek.Signature(vrs=(int(vv), int.from_bytes(sb[:32], "big"),
+                                             int.from_bytes(sb[32:64], "big"))).recover_public_key_from_msg_hash(digest)
+                    buyer = rec.to_checksum_address()
+                except Exception as ex:
+                    conn.close()
+                    return self.json_out(400, {"error": "bad signature: " + repr(ex)[:100]})
+                if buyer.lower() != (auth.get("from") or "").lower():
+                    conn.close()
+                    return self.json_out(400, {"error": "signature does not authorize the claimed payer"})
+                conn.execute("CREATE TABLE IF NOT EXISTS x402_paid(nonce TEXT PRIMARY KEY, from_addr TEXT, to_addr TEXT, value INTEGER, valid_after INTEGER, valid_before INTEGER, signature TEXT, status TEXT DEFAULT 'unsettled', created_at TEXT)")
+                try:
+                    conn.execute("INSERT INTO x402_paid(nonce,from_addr,to_addr,value,valid_after,valid_before,signature,created_at) VALUES(?,?,?,?,?,?,?,?)",
+                                 (auth["nonce"], auth["from"].lower(), auth["to"].lower(),
+                                  int(auth["value"]), va, vb, sig, ts()))
+                    conn.commit()
+                except sqlite3.IntegrityError:
+                    conn.close()
+                    return self.json_out(402, {"error": "authorization replay rejected"})
+                try:
+                    data = json.load(open("/www/wwwroot/paycensus/data/rank.json"))
+                except OSError:
+                    conn.close()
+                    return self.json_out(503, {"error": "rank data not ready"})
+                conn.close()
+                return self.json_out(200, {"paid": True, "amount_usd": X402_PRICE / 1e6,
+                                           "buyer": buyer, "data": data})
             return self.json_out(404, {"error": "not found"})
         except Exception as ex:  # noqa: BLE001
             return self.json_out(500, {"error": str(ex)[:200]})

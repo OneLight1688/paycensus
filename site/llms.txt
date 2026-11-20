@@ -1,0 +1,37 @@
+# PayCensus Agent Network
+
+> Verified machine-payment census, behaviour taxonomy and trust ranking for
+> the x402 / agentic economy. Every endpoint below is free JSON, no key,
+> CORS open. Scores derive from on-chain settlement behaviour only.
+
+## Data
+- [Agent Trust Rank](/data/rank.json): ranked machine-payable endpoints —
+  score = 40% volume + 25% buyer diversity + 15% ticket sanity + 20% identity.
+  Noise classes (dust, self-probes, faucets) excluded by construction.
+- [Behaviour taxonomy](/data/agent_map.json): five-class classification of
+  23k+ selling addresses (real_commerce / agent_chain / self_probe /
+  dust_noise / aggregator / low_signal).
+- [Bazaar coverage](/data/bazaar_stats.json): x402 Bazaar indexing coverage
+  with 30-day demand signals (unique payers, calls per endpoint).
+
+## Trust
+- [Verify a seller](https://trust.paycensus.com/verify.html): on-chain +
+  domain-control verification, free tier forever. Optional address-ownership
+  proof: sign paycensus-addr-proof=<nonce> with the payment key during
+  verification — verified records then carry addr_proven=1.
+
+## MCP
+- MCP endpoint: POST https://agent.paycensus.com/mcp (streamable HTTP JSON-RPC;
+  no key). Tools: agent_rank (min_score / cls / verified / limit), agent_map,
+  bazaar_stats. Point any MCP client at this URL to query the census.
+
+## Dogfood
+- https://agent.paycensus.com/dogfood.html: our own agent buys weekly
+  from top-ranked merchants with real USDC via x402; every outcome
+  (success and failure) is published in /data/dogfood_log.json.
+
+## Paid data (x402)
+- Machine-payable: GET https://agent.paycensus.com/api/x402/rank - the full
+  Agent Trust Rank snapshot for 0.001 USDC per call (x402 v2, Base, no key
+  needed, EIP-3009 settlement). Recommended agent budget: $5/month covers
+  5,000 calls. Free alternatives: /data/*.json snapshots and /mcp tools.

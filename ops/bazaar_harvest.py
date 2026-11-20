@@ -171,6 +171,9 @@ def main():
         vaddr = set()
     stats["verified_payto"] = len({a for a in payto_all
                                    if a.lower() in vaddr})
+    stats["self_listed"] = any(
+        r.get("resource") == "https://agent.paycensus.com/api/x402/rank"
+        for r in res)
     json.dump(stats, open(STATS_OUT, "w"))
     con.close()
     log(f"attributed_now={attributed} our_sellers_covered={our_covered} "
