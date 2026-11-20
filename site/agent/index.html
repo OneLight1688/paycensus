@@ -54,6 +54,30 @@
 
   <h2>Agent Trust Rank <em>· score = 40% volume + 25% buyer diversity + 15% ticket sanity + 20% identity</em></h2>
   <p class="muted" style="margin:-6px 0 10px;font-size:13px">This is your endpoint? Prove domain control and bind your payment address — free verification at <a href="https://trust.paycensus.com/verify.html">trust.paycensus.com/verify.html</a>. A claimed identity adds up to 20% score and a public badge.</p>
+
+<div class="panel" style="margin-top:14px" id="mppPanel">
+  <h2 style="margin-top:0">MPP (Tempo) — monitored, not rankable yet</h2>
+  <p class="muted" id="mppStatus" style="margin:0">loading…</p>
+</div>
+<script>
+fetch("https://paycensus.com/data/mpp.json").then(r => r.json()).then(d => {
+  const L = d.latest || {}, avg = d.today_avg_tx_per_min;
+  document.getElementById("mppStatus").innerHTML =
+    "Tempo Mainnet sampled hourly (public keyless API): latest sample <b>~" + L.tx_per_min +
+    " tx/min</b>" + (avg ? " · 24h avg " + avg + " tx/min" : "") +
+    " (~" + Number(L.est_daily_txs || 0).toLocaleString() + " tx/day, all tx types)." +
+    " These are aggregate estimates with <b>no per-endpoint payTo attribution</b> — scoring MPP endpoints" +
+    " on volume / buyer diversity / ticket sanity would be fabrication, so they are excluded from this rank" +
+    " by construction (census discipline: sampled estimates are never merged into counted tables)." +
+    ' Protocol-level monitoring lives in <a href="https://paycensus.com/data/mpp.json">mpp.json</a>' +
+    " (per-token split, OUSD, offer graph, schemes seen). If Tempo ever exposes public per-settlement data," +
+    " MPP endpoints join this rank under the same methodology.";
+}).catch(function () {
+  document.getElementById("mppStatus").textContent =
+    "MPP/Tempo is monitored as aggregate sampled estimates (mpp.json) — no per-endpoint attribution yet," +
+    " so MPP endpoints are excluded from this rank by construction.";
+});
+</script>
   <div class="panel"><table id="tRank"><thead><tr><th class="right">#</th><th class="right">Score</th><th>Address</th><th>Domain</th><th class="right">Volume</th><th class="right">Buyers</th><th class="right">Avg ticket</th><th>Identity</th><th class="right">30d payers</th></tr></thead><tbody></tbody></table></div>
 
   <h2>API <em>· free JSON + keyed high-frequency endpoints</em></h2>
