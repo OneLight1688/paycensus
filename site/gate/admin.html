@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="robots" content="noindex,nofollow">
+<title>Gate Admin — PayCensus</title>
+<style>
+body{font-family:system-ui;max-width:960px;margin:24px auto;padding:0 16px;background:#12141a;color:#e8e8e8}
+h1{font-size:20px}h2{font-size:15px;border-bottom:1px solid #333;padding-bottom:4px}
+table{width:100%;border-collapse:collapse;font-size:13px}td,th{padding:5px 7px;border-bottom:1px solid #2a2d36;text-align:left;vertical-align:top}
+th{color:#9aa0aa;font-weight:600}
+.muted{color:#9aa0aa}.mono{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px}
+.panel{background:#191c24;border:1px solid #2a2d36;border-radius:8px;padding:14px;margin-bottom:14px}
+.ver{float:right;color:#f6821f;border:1px solid #f6821f;border-radius:6px;padding:2px 10px;font-size:13px;font-weight:600}
+.ok{color:#4caf50;font-weight:700}.bad{color:#ef5350;font-weight:700}.warn{color:#ffb300;font-weight:700}
+button{background:#f6821f;color:#12141a;border:0;border-radius:6px;padding:5px 12px;font-size:13px;font-weight:700;cursor:pointer}
+button.sec{background:#2a2d36;color:#e8e8e8;font-weight:400}
+button:hover{filter:brightness(1.1)}
+button:disabled{opacity:.5;cursor:wait}
+a{color:#f6821f;text-decoration:none}
+.st{display:inline-block;padding:1px 8px;border-radius:10px;font-size:11px;font-weight:700}
+.st.auto{background:#1d3a24;color:#4caf50}
+.st.approved{background:#1d3a24;color:#4caf50}
+.st.pending{background:#3a3118;color:#ffb300}
+.st.rejected{background:#3a1d1d;color:#ef5350}
+.st.allow{background:#1d3a24;color:#4caf50}
+.st.deny{background:#3a1d1d;color:#ef5350}
+#msg{margin:0 0 10px;font-size:13px;min-height:16px}
+details{margin-top:8px}summary{cursor:pointer;color:#9aa0aa;font-size:13px}
+pre{background:#0e1015;border:1px solid #2a2d36;border-radius:6px;padding:10px;font-size:12px;overflow:auto}
+.stats{display:flex;gap:14px;flex-wrap:wrap}
+.stat{flex:1;min-width:120px;background:#0e1015;border:1px solid #2a2d36;border-radius:8px;padding:10px 14px}
+.stat b{font-size:22px;display:block}
+.stat span{color:#9aa0aa;font-size:12px}
+</style></head>
+<body>
+<h1>Gate Admin <span class="muted">ASPL spend governance · noindex · basic-auth</span> <span class="ver">v0.1</span></h1>
+<div id="msg" class="muted"></div>
+
+<div class="panel">
+  <h2 style="margin-top:0">Status <button id="verify" class="sec" onclick="verifyChain()">Verify chain</button> <button class="sec" onclick="load()">Refresh</button></h2>
+  <div class="stats" id="stats"><span class="muted">loading…</span></div>
+  <details><summary>Active policy (gate_policy.json)</summary><pre id="pol">loading…</pre></details>
+</div>
+
+<div class="panel">
+  <h2 style="margin-top:0">Pending approvals</h2>
+  <p class="muted" style="margin-top:0;font-size:12px">Intents that exceeded autoApprove and require a human decision. Approving records the decision; the agent retries the spend and the re-evaluation lands in the audit chain.</p>
+  <div id="pending">loading…</div>
+</div>
+
+<div class="panel">
+  <h2 style="margin-top:0">Audit trail <span class="muted" style="font-size:12px">hash-linked, append-only · latest first</span></h2>
+  <div id="audit">loading…</div>
+</div>
+
+<script>
+const j = (u, o) => fetch(u, o).then(r => r.json());
+function msg(t, err) { const m = document.getElementById("msg"); m.textContent = t || ""; m.style.color = err ? "#ef5350" : "#9aa0aa"; }
+
+async function load() {
+  msg("loading…");
+  try {
+    const [st, pd, au] = await Promise.all([
+      j("/api/gate/status"), j("/api/gate/pending"), j("/api/gate/audit?limit=100")
+    ]);
+    renderStats(st); renderPending(pd); renderAudit(au);
+    msg("");
+  } catch (e) { msg("load failed: " + e, true); }
+}
+
+function renderStats(st) {
+  document.getElementById("pol").textContent = JSON.stringify(st.policy || {}, null, 2);
+  const chain = st.chainOk ? '<span class="ok">VERIFIED</span>' : '<span class="bad">BROKEN</span>';
+  document.getElementById("stats").innerHTML =
+    `<div class="stat"><b>${st.events}</b><span>audit events</span></div>` +
+    `<div class="stat"><b>${st.pending}</b><span>pending approvals</span></div>` +
+    `<div class="stat"><b>${chain}</b><span>hash chain · ${st.chainMsg || ""}</span></div>`;
+}
+
+function renderPending(pd) {
+  const rows = pd.pending || [];
+  const el = document.getElementById("pending");
+  if (!rows.length) { el.innerHTML = '<p class="muted">No pending approvals — all spends auto-approved or already decided.</p>'; return; }
+  el.innerHTML = '<table><thead><tr><th>Time</th><th>Agent</th><th>Resource</th><th class="mono">Amount</th><th>Decision</th></tr></thead><tbody>' +
+    rows.map(r => {
+      const it = r.intent || {}, d = r.decision || {};
+      return `<tr><td class="mono">${(r.ts || "").slice(5, 16)}</td>` +
+        `<td class="mono">${r.agent || ""}</td>` +
+        `<td class="mono" style="max-width:260px;word-break:break-all">${it.resource || ""}</td>` +
+        `<td class="mono">$${it.amountUsd}</td>` +
+        `<td><span class="st pending">pending</span> ` +
+        `<button onclick="decide('${r.hash}', true)">Approve</button> ` +
+        `<button class="sec" onclick="decide('${r.hash}', false)">Reject</button>` +
+        `<br><span class="muted" style="font-size:11px">${(d.reason || "").slice(0, 110)}</span></td></tr>`;
+    }).join("") + "</tbody></table>";
+}
+
+function renderAudit(au) {
+  const evs = au.events || [];
+  const el = document.getElementById("audit");
+  if (!evs.length) { el.innerHTML = '<p class="muted">No events yet.</p>'; return; }
+  el.innerHTML = '<table><thead><tr><th>Time</th><th>Agent</th><th>Intent</th><th>Status</th><th class="mono">Hash</th></tr></thead><tbody>' +
+    evs.map(r => {
+      const it = r.intent || {}, d = r.decision || {};
+      const stCls = { "auto-approved": "auto", "approved": "approved", "pending": "pending", "rejected": "rejected" }[d.status] || "deny";
+      return `<tr><td class="mono">${(r.ts || "").slice(5, 16)}</td>` +
+        `<td class="mono">${r.agent || ""}</td>` +
+        `<td class="mono" style="max-width:300px;word-break:break-all">$${it.amountUsd} → ${it.resource || ""}<br><span class="muted" style="font-size:11px">${(d.reason || "").slice(0, 120)}</span></td>` +
+        `<td><span class="st ${stCls}">${d.status || "?"}</span>${d.allow ? ' <span class="st allow">ALLOW</span>' : ' <span class="st deny">DENY</span>'}</td>` +
+        `<td class="mono" title="${r.hash || ""}">${(r.hash || "").slice(0, 10)}…</td></tr>`;
+    }).join("") + "</tbody></table>";
+}
+
+async function decide(hash, approve) {
+  const who = prompt(approve ? "Approver name (recorded in audit):" : "Rejector name (recorded in audit):", "ops");
+  if (who === null) return;
+  msg((approve ? "approving" : "rejecting") + " " + hash.slice(0, 10) + "…");
+  try {
+    const r = await j("/api/gate/" + (approve ? "approve" : "reject"), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ hash: hash, approver: who })
+    });
+    if (r.error) { msg("failed: " + r.error, true); return; }
+    msg((approve ? "approved" : "rejected") + " " + hash.slice(0, 10) + "… by " + who);
+    load();
+  } catch (e) { msg("request failed: " + e, true); }
+}
+
+async function verifyChain() {
+  const b = document.getElementById("verify");
+  b.disabled = true; b.textContent = "Verifying…";
+  try {
+    const r = await j("/api/gate/verify", { method: "POST", body: "{}" });
+    alert(r.chainOk ? "Chain VERIFIED — " + r.chainMsg : "Chain BROKEN — " + r.chainMsg);
+    load();
+  } catch (e) { msg("verify failed: " + e, true); }
+  b.disabled = false; b.textContent = "Verify chain";
+}
+
+load();
+</script>
+</body></html>

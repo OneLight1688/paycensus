@@ -1804,6 +1804,82 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("Content-Length", "0")
         self.end_headers()
 
+    # ---------- gate admin (ASPL spend governance; nginx basic-auth in front) ----------
+    def _gate(self):
+        import sys as _sys
+        if "/opt/paycensus" not in _sys.path:
+            _sys.path.insert(0, "/opt/paycensus")
+        import gate_policy
+        return gate_policy
+
+    def gate_get(self, path, q):
+        gp = self._gate()
+        if path == "/api/gate/status":
+            ok, msg = gp.verify_chain()
+            try:
+                pol = gp.load_policy()
+            except Exception:
+                pol = {}
+            n_events = 0
+            try:
+                with open(gp.AUDIT_PATH) as f:
+                    n_events = sum(1 for _ in f)
+            except OSError:
+                pass
+            pend = gp.pending_intents()
+            return self.json_out(200, {
+                "chainOk": ok, "chainMsg": msg, "events": n_events,
+                "pending": len(pend), "policy": pol})
+        if path == "/api/gate/pending":
+            return self.json_out(200, {"pending": gp.pending_intents()})
+        if path == "/api/gate/audit":
+            try:
+                limit = max(1, min(1000, int(q.get("limit", "100"))))
+            except ValueError:
+                limit = 100
+            evs = []
+            try:
+                with open(gp.AUDIT_PATH) as f:
+                    for line in f:
+                        try:
+                            evs.append(json.loads(line))
+                        except ValueError:
+                            pass
+            except OSError:
+                pass
+            return self.json_out(200, {"events": evs[-limit:][::-1]})
+        return self.json_out(404, {"error": "unknown gate endpoint"})
+
+    def gate_post(self, path):
+        gp = self._gate()
+        n = 0
+        try:
+            n = int(self.headers.get("Content-Length") or 0)
+        except ValueError:
+            n = 0
+        if n > 65536:
+            return self.json_out(400, {"error": "bad payload size"})
+        raw = self.rfile.read(n) if n else b""
+        try:
+            body = json.loads(raw.decode("utf-8") or "{}")
+        except ValueError:
+            return self.json_out(400, {"error": "bad json"})
+        if path in ("/api/gate/approve", "/api/gate/reject"):
+            state = "approved" if path.endswith("/approve") else "rejected"
+            h = (body.get("hash") or "").strip()
+            approver = (body.get("approver") or "ops").strip()
+            if not h:
+                return self.json_out(400, {"error": "hash required"})
+            intent = gp._find_intent(h, gp.AUDIT_PATH)
+            if intent is None:
+                return self.json_out(404, {"error": "event not found"})
+            entry = gp.set_approval(h, state, approver, intent)
+            return self.json_out(200, {"ok": True, "entry": entry})
+        if path == "/api/gate/verify":
+            ok, msg = gp.verify_chain()
+            return self.json_out(200, {"chainOk": ok, "chainMsg": msg})
+        return self.json_out(404, {"error": "unknown gate endpoint"})
+
     def do_GET(self):
         ip = self.client_address[0]
         if not limited(ip):
@@ -1814,6 +1890,8 @@ class Handler(BaseHTTPRequestHandler):
             if "=" in kv:
                 k, _, v = kv.partition("=")
                 q[k] = v
+        if path.startswith("/api/gate/"):
+            return self.gate_get(path, q)
         try:
             if path == "/api/meta":
                 return self.json_out(200, {
@@ -2233,6 +2311,8 @@ class Handler(BaseHTTPRequestHandler):
     def do_POST(self):
         ip = self.client_address[0]
         path = self.path
+        if path.startswith("/api/gate/"):
+            return self.gate_post(path.partition("?")[0])
         # --- Stripe webhook: raw body, signature-verified, outside JSON/honeypot ---
         if path == "/api/stripe/webhook":
             try:

@@ -266,7 +266,9 @@ def pending_intents(audit_path=AUDIT_PATH):
                     pend[key] = ev
     except OSError:
         pass
-    return list(pend.values())
+    # drop intents already decided via approvals (pending view only)
+    decided = {a.get("eventHash") for a in _load_approvals()}
+    return [ev for ev in pend.values() if ev.get("hash") not in decided]
 
 
 def verify_chain(audit_path=AUDIT_PATH):

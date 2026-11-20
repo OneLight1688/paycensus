@@ -12,6 +12,13 @@ table{width:100%;border-collapse:collapse;font-size:13px}td,th{padding:4px 6px;b
 #hcrun:hover:not(:disabled){filter:brightness(1.1)}</style></head>
 <body>
 <h1>PayCensus internal ops <span class="muted">(noindex, basic-auth)</span> <span class="muted" style="font-size:12px">⛓ Bitcoin-anchored daily</span><span class="ver">v0.24.7<small>2026-11-14</small></span></h1>
+<div class="panel" id="backends">
+  <h2 style="margin-top:0">Backends &middot; quick switch</h2>
+  <p style="margin:0;font-size:14px"><b>PayCensus Ops</b> <span class="muted">(here)</span> &nbsp;&middot;&nbsp;
+  <a style="color:#f6821f" href="https://trust.paycensus.com/admin.html">Trust Admin</a> &nbsp;&middot;&nbsp;
+  <a style="color:#f6821f" href="https://agent.paycensus.com/admin.html">Agent Admin</a> &nbsp;&middot;&nbsp;
+  <a style="color:#f6821f" href="https://gate.paycensus.com/admin.html">Gate Admin</a></p>
+</div>
 <div class="panel">
   <h2 style="margin-top:0">System self-check <button id="hcrun">Run self-check</button> <span class="muted" style="font-size:12px">read-only diagnostics · cron, nginx, API, data freshness, anchoring chain, endpoints</span></h2>
   <div id="hc" class="muted">not run yet this session</div>
