@@ -1848,6 +1848,8 @@ class Handler(BaseHTTPRequestHandler):
             except OSError:
                 pass
             return self.json_out(200, {"events": evs[-limit:][::-1]})
+        if path.startswith("/api/gate/console/"):
+            return self.console_api_get(path, q)
         return self.json_out(404, {"error": "unknown gate endpoint"})
 
     def gate_post(self, path):
@@ -1864,6 +1866,10 @@ class Handler(BaseHTTPRequestHandler):
             body = json.loads(raw.decode("utf-8") or "{}")
         except ValueError:
             return self.json_out(400, {"error": "bad json"})
+        if path == "/api/gate/evaluate":
+            return self.gate_evaluate(body)
+        if path.startswith("/api/gate/console/"):
+            return self.console_api_post(path, body)
         if path in ("/api/gate/approve", "/api/gate/reject"):
             state = "approved" if path.endswith("/approve") else "rejected"
             h = (body.get("hash") or "").strip()
@@ -1879,6 +1885,228 @@ class Handler(BaseHTTPRequestHandler):
             ok, msg = gp.verify_chain()
             return self.json_out(200, {"chainOk": ok, "chainMsg": msg})
         return self.json_out(404, {"error": "unknown gate endpoint"})
+
+    # ---------- gate enterprise console (departments/agents/policies/txs) ----------
+    def _ge(self):
+        import gate_enterprise
+        return gate_enterprise
+
+    def _gate_txs(self, q=None):
+        import time as _time
+        q = q or {}
+        ge = self._ge()
+        by_name = {a["name"]: a for a in ge.agent_rows()}
+        txs = []
+        try:
+            with open("/var/lib/paycensus/gate_audit.jsonl") as f:
+                for line in f:
+                    try:
+                        ev = json.loads(line)
+                    except ValueError:
+                        continue
+                    if ev.get("type") != "payment.evaluated":
+                        continue
+                    it = ev.get("intent") or {}
+                    d = ev.get("decision") or {}
+                    a = by_name.get(ev.get("agent") or "")
+                    txs.append({
+                        "ts": ev.get("ts"), "eventMonth": ev.get("eventMonth"),
+                        "agent": ev.get("agent"),
+                        "dept": (a or {}).get("dept") or "",
+                        "deptId": (a or {}).get("dept_id"),
+                        "resource": it.get("resource"), "rail": it.get("rail"),
+                        "payTo": it.get("payTo"),
+                        "amountUsd": it.get("amountUsd") or 0,
+                        "status": d.get("status"),
+                        "allow": bool(d.get("allow")),
+                        "reason": d.get("reason"), "hash": ev.get("hash")})
+        except OSError:
+            pass
+
+        def _s(v):
+            return (v or "").strip()
+
+        if q.get("deptId"):
+            try:
+                dx = int(q["deptId"])
+                txs = [t for t in txs if t["deptId"] == dx]
+            except ValueError:
+                pass
+        status = _s(q.get("status"))
+        if status:
+            txs = [t for t in txs if t["status"] == status]
+        f_date, t_date = _s(q.get("from")), _s(q.get("to"))
+        if f_date:
+            txs = [t for t in txs if (t["ts"] or "") >= f_date]
+        if t_date:
+            txs = [t for t in txs if (t["ts"] or "")[:10] <= t_date]
+        if q.get("min"):
+            try:
+                txs = [t for t in txs if float(t["amountUsd"]) >= float(q["min"])]
+            except ValueError:
+                pass
+        if q.get("max"):
+            try:
+                txs = [t for t in txs if float(t["amountUsd"]) <= float(q["max"])]
+            except ValueError:
+                pass
+        txs.reverse()
+        try:
+            limit = max(1, min(1000, int(q.get("limit", "200"))))
+        except ValueError:
+            limit = 200
+        return txs[:limit]
+
+    @staticmethod
+    def _csv_cell(v):
+        s = "" if v is None else str(v)
+        if any(ch in s for ch in ",\u0022\n"):
+            s = '"' + s.replace('"', '""') + '"'
+        return s
+
+    def console_api_get(self, path, q):
+        import time as _time
+        ge = self._ge()
+        if path == "/api/gate/console/overview":
+            depts = ge.dept_rows()
+            ags = [a for a in ge.agent_rows() if not a["revoked"]]
+            all_txs = self._gate_txs()
+            m = _time.strftime("%Y-%m")
+            m_txs = [t for t in all_txs if t["eventMonth"] == m]
+            spend = sum(float(t["amountUsd"]) for t in m_txs if t["allow"])
+            return self.json_out(200, {"depts": len(depts), "agents": len(ags),
+                "monthSpend": round(spend, 4), "monthTx": len(m_txs)})
+        if path == "/api/gate/console/depts":
+            return self.json_out(200, {"depts": ge.dept_rows()})
+        if path == "/api/gate/console/agents":
+            return self.json_out(200, {"agents": ge.agent_rows()})
+        if path == "/api/gate/console/txs":
+            return self.json_out(200, {"txs": self._gate_txs(q)})
+        if path == "/api/gate/console/stats":
+            depts = ge.dept_rows()
+            ags = ge.agent_rows()
+            all_txs = self._gate_txs()
+            m = _time.strftime("%Y-%m")
+            m_txs = [t for t in all_txs if t["eventMonth"] == m]
+            by_dept = []
+            for d in depts:
+                dt = [t for t in m_txs if t["deptId"] == d["id"]]
+                spend = sum(float(t["amountUsd"]) for t in dt if t["allow"])
+                by_dept.append({"dept": d["name"], "budget": d["monthly_budget"],
+                                "spend": round(spend, 4), "txs": len(dt)})
+            by_agent = []
+            for a in ags:
+                at = [t for t in m_txs if t["agent"] == a["name"]]
+                spend = sum(float(t["amountUsd"]) for t in at if t["allow"])
+                by_agent.append({"agent": a["name"], "dept": a["dept"],
+                                 "budget": a["monthly_budget"],
+                                 "spend": round(spend, 4), "txs": len(at)})
+            return self.json_out(200, {"month": m, "byDept": by_dept,
+                                       "byAgent": by_agent})
+        if path == "/api/gate/console/export":
+            rows = self._gate_txs(q)
+            month = (q.get("month") or _time.strftime("%Y-%m")).strip()
+            lines = ["ts,month,agent,department,resource,rail,pay_to,"
+                     "amount_usd,status,allow,reason,event_hash"]
+            for t in rows:
+                if month and t["eventMonth"] != month:
+                    continue
+                lines.append(",".join(self._csv_cell(x) for x in [
+                    t["ts"], t["eventMonth"], t["agent"], t["dept"],
+                    t["resource"], t["rail"], t["payTo"],
+                    "%.6f" % float(t["amountUsd"] or 0), t["status"],
+                    "1" if t["allow"] else "0", t["reason"], t["hash"]]))
+            body = "\n".join(lines) + "\n"
+            self.send_response(200)
+            self.send_header("Content-Type", "text/csv; charset=utf-8")
+            self.send_header("Content-Disposition",
+                             'attachment; filename="gate_transactions_%s.csv"'
+                             % month)
+            self._cors()
+            b = body.encode("utf-8")
+            self.send_header("Content-Length", str(len(b)))
+            self.end_headers()
+            self.wfile.write(b)
+            return
+        return self.json_out(404, {"error": "unknown console endpoint"})
+
+    def console_api_post(self, path, body):
+        ge = self._ge()
+        if path == "/api/gate/console/depts/create":
+            name = (body.get("name") or "").strip()
+            if not name:
+                return self.json_out(400, {"error": "name required"})
+            g = lambda k, dflt: (float(body[k]) if body.get(k) is not None
+                                 else dflt)
+            try:
+                i = ge.create_dept(name, g("monthlyBudget", 50.0),
+                                   g("autoApproveBelow", 0.01),
+                                   g("requireApprovalAbove", 0.05),
+                                   g("trustFloor", 0.0),
+                                   body.get("pinned") or [])
+            except Exception as ex:
+                return self.json_out(400, {"error": str(ex)})
+            return self.json_out(200, {"ok": True, "id": i})
+        if path == "/api/gate/console/depts/update":
+            i = int(body.get("id") or 0)
+            up = {}
+            m = {"monthlyBudget": "monthly_budget",
+                 "autoApproveBelow": "auto_approve_below",
+                 "requireApprovalAbove": "require_approval_above",
+                 "trustFloor": "trust_floor"}
+            for k, v in m.items():
+                if k in body:
+                    up[v] = body[k]
+            if "pinned" in body:
+                up["pinned"] = body["pinned"]
+            if "name" in body:
+                up["name"] = body["name"]
+            try:
+                ge.update_dept(i, up)
+            except Exception as ex:
+                return self.json_out(400, {"error": str(ex)})
+            return self.json_out(200, {"ok": True})
+        if path == "/api/gate/console/depts/delete":
+            ge.delete_dept(int(body.get("id") or 0))
+            return self.json_out(200, {"ok": True})
+        if path == "/api/gate/console/agents/create":
+            name = (body.get("name") or "").strip()
+            dept_id = int(body.get("deptId") or 0)
+            if not name or not dept_id:
+                return self.json_out(400, {"error": "name and deptId required"})
+            try:
+                token = ge.create_agent(name, dept_id, body.get("monthlyBudget"))
+            except Exception as ex:
+                return self.json_out(400, {"error": str(ex)})
+            return self.json_out(200, {"ok": True, "token": token})
+        if path == "/api/gate/console/agents/revoke":
+            ge.revoke_agent(int(body.get("id") or 0))
+            return self.json_out(200, {"ok": True})
+        return self.json_out(404, {"error": "unknown console endpoint"})
+
+    def gate_evaluate(self, body):
+        ge = self._ge()
+        auth = self.headers.get("Authorization") or ""
+        tok = auth[7:].strip() if auth.startswith("Bearer ") else ""
+        arow = ge.verify_token(tok)
+        if not arow:
+            return self.json_out(401, {"error": "invalid or revoked token"})
+        try:
+            amount = float(body.get("amountUsd") or 0)
+        except (TypeError, ValueError):
+            return self.json_out(400, {"error": "amountUsd must be a number"})
+        if amount <= 0:
+            return self.json_out(400, {"error": "amountUsd must be > 0"})
+        resource = (body.get("resource") or "").strip()
+        if not resource:
+            return self.json_out(400, {"error": "resource required"})
+        gp = self._gate()
+        res = gp.evaluate(arow["name"], resource, amount,
+                          rail=(body.get("rail") or "x402") or "x402",
+                          pay_to=(body.get("payTo") or None) or None,
+                          policy=ge.build_policy(arow))
+        return self.json_out(200, {"agent": arow["name"],
+                                   "dept": arow["dept"], "decision": res})
 
     def do_GET(self):
         ip = self.client_address[0]

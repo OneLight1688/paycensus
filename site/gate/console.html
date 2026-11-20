@@ -1,0 +1,357 @@
+<!DOCTYPE html>
+<html lang="zh-CN"><head><meta charset="utf-8">
+<meta name="robots" content="noindex,nofollow">
+<title>Gate Console — PayCensus</title>
+<style>
+*{box-sizing:border-box}
+body{font-family:system-ui;margin:0;background:#0e1015;color:#e8e8e8}
+.layout{display:grid;grid-template-columns:200px 1fr;min-height:100vh}
+aside{background:#12141a;border-right:1px solid #23262f;padding:16px 12px;position:sticky;top:0;height:100vh;overflow-y:auto}
+.brand{font-weight:700;margin-bottom:2px}.brand span{color:#f6821f}
+.brand .muted{font-weight:400;font-size:11px;display:block;margin-bottom:14px}
+nav a{display:block;padding:9px 12px;border-radius:6px;color:#9aa0aa;text-decoration:none;font-size:14px;cursor:pointer;margin-bottom:2px}
+nav a:hover{background:#191c24;color:#e8e8e8}
+nav a.on{background:#f6821f;color:#12141a;font-weight:700}
+.sidefoot{margin-top:20px;font-size:11px;color:#5c626d;line-height:1.6}
+main{padding:20px 26px;max-width:1080px}
+h1{font-size:18px;margin:0 0 14px}
+h2{font-size:15px;margin:0 0 12px}
+a{color:#f6821f;text-decoration:none}
+.muted{color:#9aa0aa;font-size:13px}
+.mono{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12.5px;word-break:break-all}
+.panel{background:#12141a;border:1px solid #23262f;border-radius:8px;padding:16px;margin-bottom:16px}
+input,select{background:#0e1015;color:#e8e8e8;border:1px solid #23262f;border-radius:6px;padding:8px;margin:4px 0 10px;width:100%;font-size:13px}
+label{font-size:12px;color:#9aa0aa;display:block;margin-top:4px}
+button{background:#f6821f;color:#12141a;border:0;border-radius:6px;padding:7px 16px;font-weight:700;cursor:pointer;font-size:13px}
+button.sec{background:#23262f;color:#e8e8e8;font-weight:400}
+button.danger{background:#3a1d1d;color:#ef5350;font-weight:400}
+button:hover{filter:brightness(1.1)}
+table{width:100%;border-collapse:collapse;font-size:12.5px}
+td,th{padding:6px 8px;border-bottom:1px solid #23262f;text-align:left;vertical-align:top}
+th{color:#9aa0aa;font-weight:600;white-space:nowrap}
+.ok{color:#4caf50;font-weight:600}.bad{color:#ef5350;font-weight:600}.warn{color:#ffb300;font-weight:600}
+.st{display:inline-block;padding:1px 8px;border-radius:10px;font-size:11px;font-weight:700}
+.st.auto{background:#1d3a24;color:#4caf50}.st.approved{background:#1d3a24;color:#4caf50}
+.st.pending{background:#3a3118;color:#ffb300}.st.rejected{background:#3a1d1d;color:#ef5350}
+.stats{display:flex;gap:14px;flex-wrap:wrap;margin-bottom:14px}
+.stat{flex:1;min-width:130px;background:#0e1015;border:1px solid #2a2d36;border-radius:8px;padding:12px 16px}
+.stat b{font-size:22px;display:block}
+.stat span{color:#9aa0aa;font-size:12px}
+.pg{display:none}.pg.on{display:block}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:0 18px}
+.grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:0 18px}
+#msg{margin:0 0 10px;font-size:13px;min-height:16px;color:#9aa0aa}
+#tokenBox{background:#0e1015;border:1px solid #ffb300;border-radius:8px;padding:12px;margin-top:10px;display:none}
+#tokenBox .mono{color:#ffb300;font-size:14px}
+details summary{cursor:pointer;color:#9aa0aa;font-size:12px}
+pre{background:#0e1015;border:1px solid #2a2d36;border-radius:6px;padding:10px;font-size:12px;overflow:auto}
+.frm{display:none;background:#0e1015;border:1px solid #2a2d36;border-radius:8px;padding:14px;margin-bottom:12px}
+.frm.on{display:block}
+</style></head>
+<body>
+<div class="layout">
+<aside>
+  <div class="brand">Gate <span>Console</span><span class="muted">agent spend governance</span></div>
+  <nav id="nav">
+    <a data-p="overview" class="on">总览</a>
+    <a data-p="depts">部门管理</a>
+    <a data-p="agents">Agent 与 Token</a>
+    <a data-p="txs">交易记录</a>
+    <a data-p="stats">统计与导出</a>
+  </nav>
+  <div class="sidefoot">
+    ASPL v0.1 · hash-linked audit<br>
+    策略求值 + 预算 + 审批 + 存证<br>
+    网关不碰资金，零牌照<br>
+    <a href="/admin.html" style="color:#5c626d">公共审计面板 →</a>
+  </div>
+</aside>
+<main>
+<div id="msg"></div>
+
+<!-- ============ 总览 ============ -->
+<div class="pg on" id="pg-overview">
+  <h1>总览</h1>
+  <div class="stats" id="ovStats"><span class="muted">loading…</span></div>
+  <div class="panel">
+    <h2 style="margin-top:0">接入方式（发给各部门开发者）</h2>
+    <p class="muted" style="margin-top:0">agent 携带所属部门签发的 token 调用网关求值；网关按部门策略裁决，逐笔写入哈希链审计：</p>
+    <pre>POST https://gate.paycensus.com/api/gate/evaluate
+Authorization: Bearer gk_xxxx…
+{"resource": "https://merchant.example/api", "amountUsd": 0.008,
+ "rail": "x402", "payTo": "0x…"}
+
+→ 200 {"agent": "sales-bot-01", "dept": "销售部",
+       "decision": {"allow": true, "status": "auto-approved",
+                    "reason": "…", "eventHash": "…"}}</pre>
+    <p class="muted">决策语义：allow=true 才付款；pending 需管理员在审计面板批准后重试；拒绝即停。token 泄漏可随时吊销（吊销立即生效）。</p>
+  </div>
+</div>
+
+<!-- ============ 部门 ============ -->
+<div class="pg" id="pg-depts">
+  <h1>部门管理</h1>
+  <div class="panel">
+    <h2 style="margin-top:0">部门 <button class="sec" onclick="deptForm()">+ 新建部门</button></h2>
+    <div id="deptTable">loading…</div>
+  </div>
+  <div class="frm" id="deptFrm">
+    <h2 id="deptFrmTitle">新建部门</h2>
+    <div class="grid2">
+      <div><label>部门名称 *</label><input id="d_name"></div>
+      <div><label>月度预算 USD（该部门每个 agent 的默认上限）</label><input id="d_budget" type="number" step="0.01" value="50"></div>
+      <div><label>免审批阈值 autoApproveBelow（≤ 此金额自动放行）</label><input id="d_auto" type="number" step="0.0001" value="0.01"></div>
+      <div><label>硬顶 requireApprovalAbove（&gt; 此金额直接拒绝）</label><input id="d_require" type="number" step="0.0001" value="0.05"></div>
+      <div><label>Trust Rank 门槛（0 = 只允许已上榜商家；无数据一律拒绝）</label><input id="d_floor" type="number" step="0.01" value="0"></div>
+      <div><label>钉选商家域名（逗号分隔，可选，命中即放行）</label><input id="d_pinned" placeholder="api.example.com, example.com"></div>
+    </div>
+    <button onclick="deptSave()">保存</button> <button class="sec" onclick="deptForm(false)">取消</button>
+    <input type="hidden" id="d_id">
+  </div>
+</div>
+
+<!-- ============ Agents ============ -->
+<div class="pg" id="pg-agents">
+  <h1>Agent 与 Token</h1>
+  <div class="panel">
+    <h2 style="margin-top:0">Agent <button class="sec" onclick="agForm()">+ 签发 Agent Token</button></h2>
+    <div id="agTable">loading…</div>
+  </div>
+  <div class="frm" id="agFrm">
+    <h2>签发 Agent Token</h2>
+    <div class="grid2">
+      <div><label>Agent 名称 *（全局唯一，写入审计链）</label><input id="a_name" placeholder="sales-bot-01"></div>
+      <div><label>所属部门 *</label><select id="a_dept"></select></div>
+      <div><label>月度预算 USD（留空 = 继承部门预算）</label><input id="a_budget" type="number" step="0.01"></div>
+    </div>
+    <button onclick="agSave()">签发</button> <button class="sec" onclick="agForm(false)">取消</button>
+  </div>
+  <div id="tokenBox">
+    <b class="warn">Token 只显示这一次</b> — 立即复制交给该 agent 的运营者。网关只存哈希，丢失只能吊销重发。
+    <div class="mono" id="tokenVal"></div>
+  </div>
+</div>
+
+<!-- ============ 交易 ============ -->
+<div class="pg" id="pg-txs">
+  <h1>交易记录</h1>
+  <div class="panel">
+    <h2 style="margin-top:0">筛选</h2>
+    <div class="grid3">
+      <div><label>部门</label><select id="f_dept" onchange="txLoad()"></select></div>
+      <div><label>状态</label><select id="f_status" onchange="txLoad()">
+        <option value="">全部</option><option>auto-approved</option>
+        <option>approved</option><option>pending</option><option>rejected</option></select></div>
+      <div><label>单笔金额区间（USD）</label>
+        <div style="display:flex;gap:8px"><input id="f_min" type="number" step="0.0001" placeholder="min" onchange="txLoad()"><input id="f_max" type="number" step="0.0001" placeholder="max" onchange="txLoad()"></div></div>
+      <div><label>从</label><input id="f_from" type="date" onchange="txLoad()"></div>
+      <div><label>到</label><input id="f_to" type="date" onchange="txLoad()"></div>
+      <div><label>&nbsp;</label><button class="sec" onclick="txLoad()">查询</button>
+        <button class="sec" onclick="txReset()">重置</button></div>
+    </div>
+  </div>
+  <div class="panel"><div id="txTable">loading…</div></div>
+</div>
+
+<!-- ============ 统计与导出 ============ -->
+<div class="pg" id="pg-stats">
+  <h1>统计与导出 <span class="muted" id="stMonth"></span></h1>
+  <div class="panel">
+    <h2 style="margin-top:0">按部门（本月）</h2>
+    <div id="stDept">loading…</div>
+  </div>
+  <div class="panel">
+    <h2 style="margin-top:0">按 Agent（本月）</h2>
+    <div id="stAgent">loading…</div>
+  </div>
+  <div class="panel">
+    <h2 style="margin-top:0">审计导出（CSV · 标准格式 · 含事件哈希可回链验证）</h2>
+    <div class="grid3">
+      <div><label>部门</label><select id="e_dept"><option value="">全部部门</option></select></div>
+      <div><label>月份</label><input id="e_month" type="month"></div>
+      <div><label>&nbsp;</label><button onclick="exportCsv()">导出 CSV</button></div>
+    </div>
+    <p class="muted">导出列：ts, month, agent, department, resource, rail, pay_to, amount_usd, status, allow, reason, event_hash。event_hash 可用公开审计链逐笔回溯验证（append-only）。</p>
+  </div>
+</div>
+
+</main>
+</div>
+<script>
+const $ = (id) => document.getElementById(id);
+const j = (u, o) => fetch(u, o).then(r => r.json());
+function msg(t, err) { const m = $("msg"); m.textContent = t || ""; m.style.color = err ? "#ef5350" : "#9aa0aa"; }
+function esc(s) { return String(s == null ? "" : s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
+const fmt = (n) => (n === null || n === undefined || n === "") ? "—" : n;
+
+// ---- nav ----
+document.querySelectorAll("#nav a").forEach(a => a.onclick = () => {
+  document.querySelectorAll("#nav a").forEach(x => x.classList.remove("on"));
+  document.querySelectorAll(".pg").forEach(x => x.classList.remove("on"));
+  a.classList.add("on"); $("pg-" + a.dataset.p).classList.add("on");
+  if (a.dataset.p === "overview") ovLoad();
+  if (a.dataset.p === "depts") { deptLoad(); }
+  if (a.dataset.p === "agents") { agLoad(); }
+  if (a.dataset.p === "txs") { txLoad(); }
+  if (a.dataset.p === "stats") { stLoad(); }
+});
+
+async function post(path, body) {
+  return j(path, {method: "POST", headers: {"Content-Type": "application/json"},
+                  body: JSON.stringify(body || {})});
+}
+
+// ---- overview ----
+async function ovLoad() {
+  try {
+    const d = await j("/api/gate/console/overview");
+    $("ovStats").innerHTML =
+      `<div class="stat"><b>${d.depts}</b><span>departments</span></div>` +
+      `<div class="stat"><b>${d.agents}</b><span>active agents</span></div>` +
+      `<div class="stat"><b>$${d.monthSpend}</b><span>approved spend · this month</span></div>` +
+      `<div class="stat"><b>${d.monthTx}</b><span>evaluations · this month</span></div>`;
+  } catch (e) { msg("load failed: " + e, true); }
+}
+
+// ---- departments ----
+let DEPTS = [];
+async function deptLoad() {
+  const d = await j("/api/gate/console/depts");
+  DEPTS = d.depts || [];
+  $("deptTable").innerHTML = !DEPTS.length ?
+    '<p class="muted">还没有部门 — 先建第一个部门，再给它的 agent 签发 token。</p>' :
+    '<table><thead><tr><th>ID</th><th>名称</th><th class="mono">月预算</th><th class="mono">免审批≤</th><th class="mono">硬顶&gt;</th><th class="mono">Trust 门槛</th><th>钉选域名</th><th></th></tr></thead><tbody>' +
+    DEPTS.map(d => `<tr><td>${d.id}</td><td><b>${esc(d.name)}</b></td>` +
+      `<td class="mono">$${fmt(d.monthly_budget)}</td><td class="mono">${d.auto_approve_below}</td>` +
+      `<td class="mono">${d.require_approval_above}</td><td class="mono">${d.trust_floor}</td>` +
+      `<td class="mono">${esc((d.pinned || []).join(", ") || "—")}</td>` +
+      `<td><button class="sec" onclick="deptEdit(${d.id})">编辑</button> ` +
+      `<button class="danger" onclick="deptDel(${d.id}, '${esc(d.name)}')">删除</button></td></tr>`).join("") +
+    "</tbody></table>";
+}
+function deptForm(show) {
+  $("deptFrm").classList.toggle("on", show !== false);
+  if (show !== false) {
+    $("deptFrmTitle").textContent = "新建部门";
+    ["d_name","d_budget","d_auto","d_require","d_floor","d_pinned"].forEach(i => $(i).value = "");
+    $("d_budget").value = 50; $("d_auto").value = 0.01; $("d_require").value = 0.05; $("d_floor").value = 0;
+    $("d_id").value = "";
+  }
+}
+function deptEdit(id) {
+  const d = DEPTS.find(x => x.id === id); if (!d) return;
+  $("deptFrmTitle").textContent = "编辑部门 #" + id;
+  $("d_id").value = id; $("d_name").value = d.name;
+  $("d_budget").value = d.monthly_budget; $("d_auto").value = d.auto_approve_below;
+  $("d_require").value = d.require_approval_above; $("d_floor").value = d.trust_floor;
+  $("d_pinned").value = (d.pinned || []).join(", ");
+  $("deptFrm").classList.add("on");
+  window.scrollTo(0, 0);
+}
+async function deptSave() {
+  const pinned = $("d_pinned").value.split(",").map(s => s.trim().toLowerCase()).filter(Boolean);
+  const body = {name: $("d_name").value.trim(), monthlyBudget: +$("d_budget").value,
+                autoApproveBelow: +$("d_auto").value, requireApprovalAbove: +$("d_require").value,
+                trustFloor: +$("d_floor").value, pinned};
+  if (!body.name) { msg("部门名称必填", true); return; }
+  const id = $("d_id").value;
+  const r = await post("/api/gate/console/depts/" + (id ? "update" : "create"),
+                       id ? Object.assign({id: +id}, body) : body);
+  if (r.error) { msg("保存失败: " + r.error, true); return; }
+  msg("已保存：" + body.name); deptForm(false); deptLoad();
+}
+async function deptDel(id, name) {
+  if (!confirm("删除部门「" + name + "」？其下所有 agent token 一并删除，且不可恢复。")) return;
+  await post("/api/gate/console/depts/delete", {id});
+  msg("已删除 " + name); deptLoad();
+}
+
+// ---- agents ----
+async function agLoad() {
+  const [d1, d2] = await Promise.all([j("/api/gate/console/agents"), j("/api/gate/console/depts")]);
+  const depts = d1.agents || [], all = d2.depts || [];
+  $("a_dept").innerHTML = all.map(d => `<option value="${d.id}">${esc(d.name)}</option>`).join("");
+  const dl = (id) => esc((all.find(d => d.id === id) || {}).name || "—");
+  $("agTable").innerHTML = !depts.length ?
+    '<p class="muted">还没有 agent — 选一个部门签发 token。</p>' :
+    '<table><thead><tr><th>ID</th><th>名称</th><th>部门</th><th class="mono">月预算</th><th class="mono">Token</th><th>状态</th><th></th></tr></thead><tbody>' +
+    depts.map(a => `<tr><td>${a.id}</td><td class="mono"><b>${esc(a.name)}</b></td><td>${dl(a.dept_id)}</td>` +
+      `<td class="mono">${a.monthly_budget ? "$" + a.monthly_budget : '<span class="muted">继承部门</span>'}</td>` +
+      `<td class="mono">${esc(a.token_prefix)}</td>` +
+      `<td>${a.revoked ? '<span class="st rejected">revoked</span>' : '<span class="st auto">active</span>'}</td>` +
+      `<td>${a.revoked ? "" : `<button class="danger" onclick="agRevoke(${a.id}, '${esc(a.name)}')">吊销</button>`}</td></tr>`).join("") +
+    "</tbody></table>";
+}
+function agForm(show) { $("agFrm").classList.toggle("on", show !== false); if (show !== false) { $("a_name").value = ""; $("a_budget").value = ""; deptDrop(); } }
+async function deptDrop() { const d = await j("/api/gate/console/depts"); $("a_dept").innerHTML = (d.depts||[]).map(x => `<option value="${x.id}">${esc(x.name)}</option>`).join(""); }
+async function agSave() {
+  const body = {name: $("a_name").value.trim(), deptId: +$("a_dept").value};
+  if ($("a_budget").value) body.monthlyBudget = +$("a_budget").value;
+  if (!body.name || !body.deptId) { msg("名称与部门必填", true); return; }
+  const r = await post("/api/gate/console/agents/create", body);
+  if (r.error) { msg("签发失败: " + r.error, true); return; }
+  $("agFrm").classList.remove("on");
+  $("tokenBox").style.display = "block";
+  $("tokenVal").textContent = r.token;
+  agLoad();
+}
+async function agRevoke(id, name) {
+  if (!confirm("吊销 " + name + " 的 token？该 agent 将立即无法通过网关付款。")) return;
+  await post("/api/gate/console/agents/revoke", {id});
+  msg("已吊销 " + name); agLoad();
+}
+
+// ---- transactions ----
+async function txLoad() {
+  const p = new URLSearchParams();
+  if ($("f_dept").value) p.set("deptId", $("f_dept").value);
+  if ($("f_status").value) p.set("status", $("f_status").value);
+  if ($("f_from").value) p.set("from", $("f_from").value);
+  if ($("f_to").value) p.set("to", $("f_to").value);
+  if ($("f_min").value) p.set("min", $("f_min").value);
+  if ($("f_max").value) p.set("max", $("f_max").value);
+  p.set("limit", "200");
+  const d = await j("/api/gate/console/txs?" + p.toString());
+  const txs = d.txs || [];
+  $("txTable").innerHTML = !txs.length ? '<p class="muted">无匹配交易。</p>' :
+    '<table><thead><tr><th>时间</th><th>Agent / 部门</th><th>资源</th><th class="mono">金额</th><th>状态</th><th class="mono">Hash</th></tr></thead><tbody>' +
+    txs.map(t => `<tr><td class="mono">${esc((t.ts||"").slice(0,16))}</td>` +
+      `<td class="mono">${esc(t.agent)}<br><span class="muted">${esc(t.dept || "未分配")}</span></td>` +
+      `<td class="mono" style="max-width:260px;word-break:break-all">${esc(t.resource)}<br><span class="muted" style="font-size:11px">${esc(t.reason||"").slice(0,110)}</span></td>` +
+      `<td class="mono">$${t.amountUsd}</td>` +
+      `<td><span class="st ${t.status==="auto-approved"?"auto":t.status==="pending"?"pending":t.status==="approved"?"approved":"rejected"}">${esc(t.status)}</span></td>` +
+      `<td class="mono" title="${esc(t.hash)}">${esc((t.hash||"").slice(0,10))}…</td></tr>`).join("") +
+    "</tbody></table>";
+}
+async function txReset() { ["f_dept","f_status","f_from","f_to","f_min","f_max"].forEach(i => $(i).value = ""); txLoad(); }
+
+// ---- stats & export ----
+async function stLoad() {
+  const [d, dd] = await Promise.all([j("/api/gate/console/stats"), j("/api/gate/console/depts")]);
+  $("stMonth").textContent = "· " + d.month;
+  const opts = (sel, list) => $(sel).innerHTML = (list||[]).map(x => `<option value="${x.id}">${esc(x.name)}</option>`).join("");
+  opts("e_dept", dd.depts); $("e_dept").insertAdjacentHTML("afterbegin", '<option value="">全部部门</option>');
+  const pct = (s, b) => b ? Math.round(100 * s / b) + "%" : "—";
+  $("stDept").innerHTML = !(d.byDept||[]).length ? '<p class="muted">无部门。</p>' :
+    '<table><thead><tr><th>部门</th><th class="mono">本月已批</th><th class="mono">预算参考</th><th class="mono">笔数</th></tr></thead><tbody>' +
+    d.byDept.map(x => `<tr><td><b>${esc(x.dept)}</b></td><td class="mono">$${x.spend}</td>` +
+      `<td class="mono">$${fmt(x.budget)} / agent</td><td class="mono">${x.txs}</td></tr>`).join("") + "</tbody></table>";
+  $("stAgent").innerHTML = !(d.byAgent||[]).length ? '<p class="muted">无 agent。</p>' :
+    '<table><thead><tr><th>Agent</th><th>部门</th><th class="mono">本月已批</th><th class="mono">预算</th><th class="mono">笔数</th></tr></thead><tbody>' +
+    d.byAgent.map(x => `<tr><td class="mono"><b>${esc(x.agent)}</b></td><td>${esc(x.dept)}</td>` +
+      `<td class="mono">$${x.spend}</td><td class="mono">${fmt(x.budget)}</td><td class="mono">${x.txs}</td></tr>`).join("") + "</tbody></table>";
+  $("e_month").value = d.month;
+}
+function exportCsv() {
+  const p = new URLSearchParams();
+  if ($("e_dept").value) p.set("deptId", $("e_dept").value);
+  if ($("e_month").value) p.set("month", $("e_month").value);
+  p.set("limit", "1000");
+  window.open("/api/gate/console/export?" + p.toString(), "_blank");
+}
+
+// init
+ovLoad(); deptLoad(); agLoad(); deptDrop();
+setInterval(() => { const on = document.querySelector("#nav a.on"); if (on && on.dataset.p === "overview") ovLoad(); }, 60000);
+</script>
+</body></html>
