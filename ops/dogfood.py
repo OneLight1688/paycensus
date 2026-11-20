@@ -380,6 +380,7 @@ def cmd_cron():
 
 def cmd_settle():
     """Broadcast unsettled x402 authorizations (needs gas ETH in payTo wallet)."""
+    import sqlite3
     from eth_account import Account
     conn = sqlite3.connect("/var/lib/paycensus/trust.db")
     try:
