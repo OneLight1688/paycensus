@@ -7,6 +7,7 @@ the enterprise.
 
 - Landing: https://gate.paycensus.com/
 - Spec: Agent Spend Policy v0.1 (open, MIT) — https://gate.paycensus.com/spec/
+- Source: https://github.com/OneLight1688/agent-spend-policy
 - Live proof: our own purchasing agent is governed by Gate — every dogfood buy
   passes budget + allowlist + audit policy: https://agent.paycensus.com/dogfood.html
 - Merchant risk data: https://agent.paycensus.com/ (Trust Rank — real settlement
