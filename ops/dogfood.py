@@ -392,13 +392,14 @@ def cmd_settle():
         return
     pk_hex = open(WALLET).read().strip().removeprefix("0x")
     acct = Account.from_key(pk_hex)
-    eth = int(rpc("eth_getBalance", [acct.address, "latest"])["result"], 16) / 1e18
-    print("payTo wallet", acct.address, "ETH=%.6f" % eth)
-    if eth < 0.0002:
-        print("insufficient gas ETH - fund the payTo wallet to settle",
-              len(rows), "authorizations")
-        return
+    bal_wei = int(rpc("eth_getBalance", [acct.address, "latest"])["result"], 16)
     gp = int(rpc("eth_gasPrice", [])["result"], 16)
+    needed = 80000 * gp * max(len(rows), 1) * 2
+    print("payTo wallet", acct.address, "ETH=%.8f, need %.8f for %d settlements (~$%.4f)"
+          % (bal_wei/1e18, needed/1e18, len(rows), needed/1e18*3300))
+    if bal_wei < needed:
+        print("insufficient gas ETH - dust suffices at Base gas prices")
+        return
     n0 = int(rpc("eth_getTransactionCount", [acct.address, "pending"])["result"], 16)
     from eth_utils import keccak as _kc
     sel = _kc(b"transferWithAuthorization(address,address,uint256,uint256,uint256,bytes32,uint8,bytes32,bytes32)")[:4]
@@ -409,7 +410,7 @@ def cmd_settle():
             print("skip expired:", nh[:16])
             continue
         sb = bytes.fromhex(sg.removeprefix("0x"))
-        vv = sb[64] - 27 if sb[64] >= 27 else sb[64]
+        vv = sb[64] if sb[64] >= 27 else sb[64] + 27  # contract ecrecover wants raw 27/28
         p32 = lambda x: bytes.fromhex(str(x).lower().removeprefix("0x").rjust(64, "0"))
         data = sel + p32(fa) + p32(ta) + int(val).to_bytes(32, "big") + int(va).to_bytes(32, "big") + int(vb).to_bytes(32, "big") + bytes.fromhex(nh.removeprefix("0x")) + vv.to_bytes(32, "big") + sb[:32] + sb[32:64]
         tx = {"to": USDC_BASE, "data": "0x" + data.hex(), "gas": 120000,
