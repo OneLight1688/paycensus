@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<title>Trust API — PayCensus</title>
+<style>
+body{font-family:system-ui;max-width:780px;margin:24px auto;padding:0 16px;background:#12141a;color:#e8e8e8}
+a{color:#f6821f;text-decoration:none}
+h1{font-size:20px}h2{font-size:15px;margin-top:24px}
+.muted{color:#9aa0aa}.mono{font-family:ui-monospace,Menlo,Consolas,monospace;background:#191c24;border:1px solid #2a2d36;border-radius:6px;padding:10px;display:block;word-break:break-all;margin:8px 0;white-space:pre-wrap}
+.ok{color:#4caf50;font-weight:600}.bad{color:#ef5350;font-weight:600}.warn{color:#ffb300}
+.logo{height:20px;vertical-align:middle;margin-right:8px}
+</style></head>
+<body>
+<p><img src="/logo.png" class="logo" alt=""> <b>PayCensus Trust API</b> <span class="muted">· v0.4.0 · also available as <span class="mono">pc.trust_status("0x…")</span> in the open-source <a href="https://pypi.org/project/paycensus/">paycensus</a> client</span></p>
+<h1>Factor lookup for machine payments</h1>
+<p class="muted">Call before you settle. Deterministic facts only — attribution, verification state, record age. No scores, no opinions. Free tier: 10 calls/day (API key required).</p>
+<div style="background:#12141a;border:1px solid #23262f;border-radius:10px;padding:14px 18px;margin:14px 0">
+<b>Get started in 3 steps.</b>
+<ol style="margin:8px 0 4px;padding-left:20px;font-size:13.5px;line-height:1.7">
+<li><a href="/account.html">Create a free account</a> (email + 6-digit code)</li>
+<li><a href="/account.html">Create an API key</a> — you get a <span class="mono">pct_…</span> key, shown once</li>
+<li>Call: <span class="mono">curl "https://trust.paycensus.com/api/factors?addr=0x…" -H "Authorization: Bearer pct_…"</span></li>
+</ol>
+<span class="muted">Free: 10 factor calls/day. Need more? Subscribe to Verified+ ($49/mo, 100k/day) from your <a href="/account.html">account portal</a> — no domain required for API customers.</span>
+</div>
+<p><b>Pricing.</b> <b>Free</b> — 10 factor calls/day per key; public endpoints (status, revocations, citations, directory) unlimited. <b>Scale</b> — $49/month (Verified+ plan) lifts factor metering to 100k/day; subscribe at <a href="/">trust.paycensus.com</a>. Verification facts and registry data stay free forever — we never sell access to the truth, only to presentation and convenience.</p>
+
+<h2>GET /api/status?addr={address}</h2>
+<span class="mono">curl "https://trust.paycensus.com/api/status?addr=0x1603B3A5119AA82AB1349E29f2d49B5170e085b7"</span>
+<p>Response:</p>
+<span class="mono">{
+  "addr": "0x1603…85b7",
+  "domain": "seller.example.com",
+  "status": "verified",
+  "verified_at": "2026-11-07 03:40:11 UTC",
+  "last_checked": "2026-11-07 03:40:11 UTC",
+  "since": "2026-11-07"
+}</span>
+<p class="muted">status ∈ <span class="ok">verified</span> · <span class="warn">pending</span> · <span class="bad">revoked</span> · none. Cached ≤60s. Revoked records keep history — see /api/revocations.</p>
+
+<h2>GET /api/revocations</h2>
+<p class="muted">Public append-only revocation list (the CRL of machine commerce). Cached ≤60s.</p>
+
+<h2>POST /api/verify/start · /api/verify/check · /api/report</h2>
+<p class="muted">Seller-side flows — used by the <a href="/verify.html">verify page</a>; same contract. A report triggers an automatic re-examination; the deterministic result is the outcome. Reports are logged append-only.</p>
+
+<h2>API keys &amp; metering (v0.2)</h2>
+<p>Get a key:</p>
+<span class="mono">curl -X POST https://trust.paycensus.com/api/keys/create \
+  -H "Content-Type: application/json" \
+  -d '{"label":"my-facilitator"}'</span>
+<p>Response (shown once, stored hashed):</p>
+<span class="mono">{"key": "pct_live_8f14e45fceea167a5a36dedd4bea2543…"}</span>
+
+<h2>GET /api/factors?addr={address}</h2>
+<p class="muted">Metered factor lookup — the endpoint a facilitator or agent calls before settling. 10 calls/day free per key. v0.3: cross-data-layer factors included.</p>
+<span class="mono">curl "https://trust.paycensus.com/api/factors?addr=0x1603B3A5119AA82AB1349E29f2d49B5170e085b7" \
+  -H "Authorization: Bearer pct_live_…"</span>
+<p>Response:</p>
+<span class="mono">{
+  "addr": "0x1603…85b7",
+  "status": "verified",
+  "domain": "seller.example.com",
+  "since": "2026-11-07",
+  "last_checked": "2026-11-07 13:41:08 UTC",
+  "plan": "free",
+  "calls_today": 1,
+  "limit": 10,
+  "factors": {
+    "attribution": {"domain": "seller.example.com", "title": "…",
+                     "source": "enrich_v3", "first_seen": "2026-11-01"},
+    "onchain": {"volume_usd": 1234.5, "txs": 89, "chains": 1,
+                 "first_day": "2026-11-01", "volume_percentile": 72.4},
+    "offers": {"offer_consistency": "stable", "count": 1,
+                "protocols": ["x402"], "latest_usd": 0.05},
+    "contactability": {"channel": true,
+                        "note": "public role-contact exists; content is never published"}
+  }
+}</span>
+<p class="muted">factors may be null where the data layer has no record — absence is reported as absence, never guessed. HTTP 429 when the daily quota is exhausted. Composite scoring deliberately does not exist yet: factors before scores, always.</p>
+
+<h2>GET /api/seal.svg?addr={address}[&amp;theme=light]</h2>
+<p class="muted">The notarized seal — generated server-side from the verification record. Part of the paid Verified tier (free tier embeds the status badge); active founding subscribers get the FOUNDING MEMBER ring. Cached ≤300s.</p>
+
+<h2>GET /api/usage</h2>
+<span class="mono">curl "https://trust.paycensus.com/api/usage" -H "Authorization: Bearer pct_live_…"</span>
+<p class="muted">Today's call count and limit for your key.</p>
+
+<h2>Factor roadmap (v0.3)</h2>
+<p class="muted">offer_consistency (probe history), volume_percentile (census aggregates), contactability (boolean, never the address), first_seen (calendar). Composite scoring only after dispute precedent accumulates — factors before scores, always.</p>
+
+<p class="muted" style="font-size:12px">Terms: <a href="/tos.html">verification is not a guarantee</a> · <a href="https://paycensus.com/audit.html">integrity</a> · v0.4.0</p>
+<p style="margin-top:26px;font-size:13px;color:#9aa0aa">Multi-chain address binding: <a style="color:#f6821f" href="/solana-proof.html">Solana proof format &amp; spec</a></p>
+</body></html>
