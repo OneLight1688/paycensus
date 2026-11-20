@@ -33,11 +33,17 @@ def main():
     verified = set(); proven = set()
     try:
         con = sqlite3.connect("file:" + TRUST + "?mode=ro", uri=True)
+        vaddr = {}; vprov = {}
         for d, a, p in con.execute(
             "SELECT DISTINCT domain, addr, addr_proven FROM verifications "
             "WHERE status='verified'"):
             if d:
                 verified.add(d.lower())
+                if a:
+                    # addr-direct binding: verified merchant declared this
+                    # payment address on their verified domain
+                    vaddr[a.lower()] = d.lower()
+                    vprov[a.lower()] = bool(p)
                 if a and p:
                     proven.add((a.lower(), d.lower()))
         con.close()
@@ -76,9 +82,10 @@ def main():
         vol = max(1.0, float(r.get("volume") or 0))
         buyers = max(1, int(r.get("buyers") or 1))
         ticket = float(r.get("avg_ticket") or 0)
-        dom = (ent.get(r["addr"]) or "").lower()
+        dom = (ent.get(r["addr"]) or vaddr.get(r["addr"].lower()) or "").lower()
         ident = 1.0 if dom and dom in verified else (0.5 if dom else 0.0)
-        prov = bool(dom and (r["addr"].lower(), dom) in proven)
+        prov = bool(vprov.get(r["addr"].lower())
+                    or (dom and (r["addr"].lower(), dom) in proven))
         score = (40 * min(1.0, math.log10(vol) / 6) +
                  25 * min(1.0, math.log10(buyers * 10) / 4) +
                  15 * min(1.0, math.log10(max(0.05, ticket) * 100) / 5) +

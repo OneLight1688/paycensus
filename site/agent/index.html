@@ -40,7 +40,7 @@
   <p class="muted" style="margin-top:8px">Updated <span id="gen">…</span> ·
   <a href="/data/rank.json">rank.json</a> ·
   <a href="/data/agent_map.json">agent_map.json</a> ·
-  <a href="/data/bazaar_stats.json">bazaar_stats.json</a> · <a href="/dogfood.html">dogfood</a> ·
+  <a href="/data/bazaar_stats.json">bazaar_stats.json</a> · <a href="/dogfood.html">dogfood</a> · <a href="https://gate.paycensus.com/">gate</a> ·
   <a href="/llms.txt">llms.txt</a> ·
   <a href="https://paycensus.com/agentmap.html">full analysis</a> ·
   <a href="https://paycensus.com">census</a></p>
@@ -53,6 +53,7 @@
   </div>
 
   <h2>Agent Trust Rank <em>· score = 40% volume + 25% buyer diversity + 15% ticket sanity + 20% identity</em></h2>
+  <p class="muted" style="margin:-6px 0 10px;font-size:13px">This is your endpoint? Prove domain control and bind your payment address — free verification at <a href="https://trust.paycensus.com/verify.html">trust.paycensus.com/verify.html</a>. A claimed identity adds up to 20% score and a public badge.</p>
   <div class="panel"><table id="tRank"><thead><tr><th class="right">#</th><th class="right">Score</th><th>Address</th><th>Domain</th><th class="right">Volume</th><th class="right">Buyers</th><th class="right">Avg ticket</th><th>Identity</th><th class="right">30d payers</th></tr></thead><tbody></tbody></table></div>
 
   <h2>API <em>· free JSON + keyed high-frequency endpoints</em></h2>
@@ -108,7 +109,7 @@ fetch("/data/rank.json").then(r => r.json()).then(d => {
     `<td class="mono">${r.domain ? `<a href="https://${r.domain}" target="_blank">${r.domain}</a>` : '<span class="muted">—</span>'}</td>` +
     `<td class="right">${fmtUSD(r.volume)}</td><td class="right">${fmtN(r.buyers)}</td>` +
     `<td class="right">$${r.avg_ticket}</td>` +
-    `<td>${r.verified ? '<span class="badge">verified</span>' : (r.identity === 0.5 ? '<span class="muted">attributed</span>' : '<span class="muted">unknown</span>')}</td>` +
+    `<td>${r.verified ? '<span class="badge">verified</span>' : (r.identity === 0.5 ? '<span class="muted">attributed</span>' : '<span class="muted">unknown</span> <a href="https://trust.paycensus.com/verify.html" title="Prove domain control + bind your payment address">claim</a>')}</td>` +
     `<td class="right">${r.bazaar_payers30 ? fmtN(r.bazaar_payers30) : '—'}</td></tr>`).join("");
 }).catch(() => { document.getElementById("gen").textContent = "unavailable"; });
 </script>
