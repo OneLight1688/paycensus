@@ -45,6 +45,10 @@ table{width:100%;border-collapse:collapse;font-size:13px}td,th{padding:4px 6px;b
   <div id="leads" class="muted">loading…</div>
 </div>
 <div class="panel">
+  <h2 style="margin-top:0">Buyer funnel (Gate GTM) · buyers = teams behind agent wallets · contacts internal-only</h2>
+  <div id="bfunnel" class="muted">loading…</div>
+</div>
+<div class="panel">
   <h2 style="margin-top:0">Contact pipeline · internal only (never public)</h2>
   <div id="contacts" class="muted">contacts live in DB contacts table (role=115+, internal only)</div>
 </div>
@@ -123,6 +127,15 @@ j("/data/leads.json").then(d=>{
   document.getElementById("leads").innerHTML =
     `<table><thead><tr><th>Tier</th><th>Count</th><th>Threshold</th><th>Status</th></tr></thead><tbody>${t}</tbody></table>
      <p class="muted">contacts: role=${c.role_unique||0} · unknown=${c.unknown_quarantined||0} · personal dropped=${c.personal_dropped||0}</p>`;
+});
+j("/data/buyer_leads.json").then(d => {
+  const t = d.totals || {};
+  const tiers = Object.entries(d.tiers || {}).map(([k, v]) =>
+    `<tr><td>${k}</td><td class="right">${v}</td></tr>`).join("");
+  document.getElementById("bfunnel").innerHTML =
+    `<p>scored <b>${t.buyers_scored}</b> · attributed <b>${t.attributed}</b> · contacts (internal) <b>${t.with_contact_internal}</b> · <b style="color:#4caf50">gate-outreach-ready ${t.gate_outreach_ready}</b></p>` +
+    `<table style="max-width:420px"><thead><tr><th>Tier</th><th class="right">Buyers</th></tr></thead><tbody>${tiers}</tbody></table>` +
+    `<p class="muted" style="font-size:12px">whale = $10k+ spend · active = $100+ & seen in 7d · gate-ready = role email cleaned-ok + 2+ merchants. Public aggregate: <a href="/data/buyer_leads.json">buyer_leads.json</a> (no contacts).</p>`;
 });
 </script>
 </body></html>
